@@ -4,6 +4,8 @@ from io import BytesIO
 from datetime import date
 from docx import Document
 from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.shared import Pt
+from docx.oxml.ns import qn
 
 # -------------------- Data helpers --------------------
 def make_course(name: str, code: str, cfu: int = 6, dept: str = "DIETI", year: str = "Second", semester: str = "Second"):
@@ -55,18 +57,30 @@ def build_study_plan_docx(
 ) -> BytesIO:
     doc = Document()
 
-    # Header block (centered)
-    for line in [
+    # ---- Global font: Times New Roman 12 pt ----
+    normal = doc.styles["Normal"]
+    normal.font.name = "Times New Roman"
+    normal.font.size = Pt(12)
+    try:
+        normal._element.rPr.rFonts.set(qn('w:eastAsia'), 'Times New Roman')
+    except Exception:
+        pass
+
+    # Header block (centered & bold)
+    header_lines = [
         "Università degli Studi di Napoli Federico II",
         "Corso di Studio",
         f"Laurea Magistrale in {degree_name}",
         "Piano di Studi",
         f"A.A {academic_year_to_aa_format(academic_year)}",
-    ]:
-        p = doc.add_paragraph(line)
+    ]
+    for line in header_lines:
+        p = doc.add_paragraph()
+        run = p.add_run(line)
+        run.bold = True
         p.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
-    # Indirizzo (sub path)
+    # Indirizzo (sub path) and coordinator line
     doc.add_paragraph(f"Indirizzo: {sub_path}")
     doc.add_paragraph("Da consegnare al Coordinatore del Corso, Prof. Giuseppe Longo")
     doc.add_paragraph("")
@@ -85,6 +99,8 @@ def build_study_plan_docx(
 
     # Table (6 columns x 8 rows: 1 header + 7 items)
     table = doc.add_table(rows=8, cols=6)
+    # visible borders like "All Borders"
+    table.style = 'Table Grid'
     hdr = table.rows[0].cells
     hdr[0].text = "Insegnamento"
     hdr[1].text = "Corso Di Laurea Da Cui È Offerto"
@@ -106,7 +122,9 @@ def build_study_plan_docx(
     doc.add_paragraph("")
 
     # Modalità di compilazione
-    doc.add_paragraph("Modalità di compilazione:")
+    p = doc.add_paragraph()
+    r = p.add_run("Modalità di compilazione:")
+    r.bold = True
     bullets = [
         "Si possono includere nel PdS sia insegnamenti consigliati dal Corso di Studio (elencati e di immediata approvazione) sia insegnamenti offerti presso l’Ateneo (riportare nome insegnamento, codice esame, Corso di Studio) purchè costituiscano un percorso didattico complementare, coerente con il Corso di Studio",
         "É ammesso il superamento del numero dei CFU previsti",
