@@ -106,23 +106,49 @@ def build_study_plan_pdf(
     story.append(Spacer(1, 8))
 
     # Table 6x8 (1 header + 7 rows)
-    data = [[
-        "Insegnamento",
-        "Corso Di Laurea Da Cui È Offerto",
-        "Codice Insegnamento",
-        "CFU",
-        "Anno",
-        "Semestre",
-    ]]
-    for c in courses[:7]:
-        data.append([c["name"], c["dept"], c["code"], str(c["cfu"]), str(c["year"]), str(c["semester"])])
+    # Compute available width and set narrow, readable column widths
+    page_w, page_h = A4
+    avail_w = page_w - doc.leftMargin - doc.rightMargin
 
-    tbl = PDFTable(data, repeatRows=1)
+    col_widths = [
+        avail_w * 0.32,  # Insegnamento
+        avail_w * 0.27,  # Offerto da
+        avail_w * 0.15,  # Codice
+        avail_w * 0.08,  # CFU
+        avail_w * 0.09,  # Anno
+        avail_w * 0.09,  # Semestre
+    ]
+
+    header_style = ParagraphStyle(name="TblHeader", parent=styles["BodyText"], alignment=TA_CENTER, fontSize=9, leading=11)
+    cell = ParagraphStyle(name="TblCell", parent=styles["BodyText"], fontSize=9, leading=11)
+    cell_center = ParagraphStyle(name="TblCellCenter", parent=cell, alignment=TA_CENTER)
+
+    data = [[
+        Paragraph("Insegnamento", header_style),
+        Paragraph("Corso Di Laurea Da Cui È Offerto", header_style),
+        Paragraph("Codice Insegnamento", header_style),
+        Paragraph("CFU", header_style),
+        Paragraph("Anno", header_style),
+        Paragraph("Semestre", header_style),
+    ]]
+
+    for c in courses[:7]:
+        data.append([
+            Paragraph(c["name"], cell),
+            Paragraph(c["dept"], cell),
+            Paragraph(c["code"], cell_center),
+            Paragraph(str(c["cfu"]), cell_center),
+            Paragraph(str(c["year"]), cell_center),
+            Paragraph(str(c["semester"]), cell_center),
+        ])
+
+    tbl = PDFTable(data, colWidths=col_widths, repeatRows=1)
     tbl.setStyle(TableStyle([
         ("GRID", (0,0), (-1,-1), 0.5, colors.black),
         ("BACKGROUND", (0,0), (-1,0), colors.whitesmoke),
-        ("ALIGN", (3,1), (5,-1), "CENTER"),
         ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
+        ("BOTTOMPADDING", (0,0), (-1,-1), 4),
+        ("TOPPADDING", (0,0), (-1,-1), 4),
     ]))
     story.append(tbl)
     story.append(Spacer(1, 10))
@@ -137,11 +163,19 @@ def build_study_plan_pdf(
 
     story.append(Spacer(1, 10))
 
-    # Signature row as 2-col table
-    sig = PDFTable([["firma dello studente", f"Napoli ({date.today().strftime('%d/%m/%Y')})"]])
+    # Signature row as 2-col table, left/right aligned on a single line
+    sig = PDFTable(
+        [["firma dello studente", f"Napoli ({date.today().strftime('%d/%m/%Y')})"]],
+        colWidths=[avail_w * 0.5, avail_w * 0.5],
+    )
     sig.setStyle(TableStyle([
         ("ALIGN", (0,0), (0,0), "LEFT"),
         ("ALIGN", (1,0), (1,0), "RIGHT"),
+        ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
+        ("LEFTPADDING", (0,0), (-1,-1), 0),
+        ("RIGHTPADDING", (0,0), (-1,-1), 0),
+        ("TOPPADDING", (0,0), (-1,-1), 4),
+        ("BOTTOMPADDING", (0,0), (-1,-1), 0),
     ]))
     story.append(sig)
 
