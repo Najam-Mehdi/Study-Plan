@@ -2,20 +2,17 @@ import streamlit as st
 import pandas as pd
 from io import BytesIO
 from datetime import date
-from docx import Document
-from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.shared import Pt, RGBColor
-from docx.oxml.ns import qn
-import os, tempfile
-import docx2pdf
-try:
-    from docx2pdf import convert as _docx2pdf_convert
-except Exception:
-    _docx2pdf_convert = None
 
-# -------------------- Data helpers --------------------
+# --- Direct PDF generation (works on Streamlit Cloud) ---
+from reportlab.lib.pagesizes import A4
+from reportlab.lib import colors
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table as PDFTable, TableStyle
+
+# ==================== Data helpers ====================
 def make_course(name: str, code: str, cfu: int = 6, dept: str = "DIETI", year: str = "Second", semester: str = "Second"):
-    # Normalize semester to words (first/second) and support 'first&second'
+    """Create a normalized course dict."""
     s = str(semester).strip()
     mapping = {
         "I": "first", "1": "first", "First": "first", "first": "first",
@@ -35,14 +32,14 @@ def make_course(name: str, code: str, cfu: int = 6, dept: str = "DIETI", year: s
 def course_label(c):
     return f"{c['name']} ({c['code']}, {c['cfu']} CFU)"
 
-# Fixed second-year components (now like normal courses)
+# Fixed second-year components
 FIXED_COMPONENTS = [
     make_course("ALTRE ATTIVITA", "12568", 6, "DIETI – LM Data Science", "Second", "second"),
     make_course("TESI DI LAUREA", "U2848", 16, "DIETI – LM Data Science", "Second", "second"),
     make_course("TIROCINIO/STAGE", "U4319", 8, "DIETI – LM Data Science", "Second", "second"),
 ]
 
-# -------------------- Document helpers --------------------
+# ==================== Document helpers ====================
 def academic_year_to_aa_format(academic_year: str) -> str:
     """Convert '2025-2026' -> '2025/26'. If already like '2025/26', return as-is."""
     if "-" in academic_year:
@@ -54,7 +51,7 @@ def academic_year_to_aa_format(academic_year: str) -> str:
     return academic_year
 
 
-def build_study_plan_docx(
+def build_study_plan_pdf(
     name: str,
     matricula: str,
     pob: str,
@@ -70,204 +67,101 @@ def build_study_plan_docx(
     courses: list,
     watermark_text: str = None,
 ) -> BytesIO:
-    doc = Document()
+    buf = BytesIO()
+    doc = SimpleDocTemplate(
+        buf, pagesize=A4, leftMargin=36, rightMargin=36, topMargin=42, bottomMargin=42
+    )
+    styles = getSampleStyleSheet()
+    title = ParagraphStyle(name="TitleCenter", parent=styles["Heading2"], alignment=TA_CENTER)
+    center = ParagraphStyle(name="Center", parent=styles["BodyText"], alignment=TA_CENTER)
+    body_just = ParagraphStyle(name="BodyJust", parent=styles["BodyText"], alignment=TA_JUSTIFY)
 
-    # Optional header watermark for PSI
-    if watermark_text:
-        try:
-            section = doc.sections[0]
-            header = section.header
-            hp = header.paragraphs[0] if header.paragraphs else header.add_paragraph()
-            hr = hp.add_run(watermark_text)
-            hr.font.size = Pt(40)
-            hr.bold = True
-            hr.font.color.rgb = RGBColor(200, 200, 200)
-            hp.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        except Exception:
-            pass
+    def p(text, style=center):
+        return Paragraph(text, style)
 
-    # --- Base font setup (adjustable) ---
-    try:
-        normal = doc.styles['Normal']
-        normal.font.name = 'Times New Roman'
-        normal.font.size = Pt(12)
-    except Exception:
-        pass
+    aa = academic_year_to_aa_format(academic_year)
 
-    def add_p(text, *, align=None, bold=False, italic=False, size=12):
-        p = doc.add_paragraph()
-        run = p.add_run(text)
-        run.font.name = 'Times New Roman'
-        # Ensure font for EastAsia too (Word quirk)
-        if run._element.rPr is not None and run._element.rPr.rFonts is not None:
-            run._element.rPr.rFonts.set(qn('w:eastAsia'), 'Times New Roman')
-        run.font.size = Pt(size)
-        run.bold = bold
-        run.italic = italic
-        if align is not None:
-            p.alignment = align
-        return p
+    story = []
+    # Header
+    story.append(p("<b>Università degli Studi di Napoli Federico II</b>", title))
+    story.append(Spacer(1, 6))
+    story.append(p("Corso di Studio", center))
+    story.append(p(f"<b>Laurea Magistrale in {degree_name}</b>", center))
+    story.append(p("<b>Piano di Studi</b>", center))
+    story.append(p(f"A.A {aa}", center))
+    story.append(Spacer(1, 6))
+    story.append(p(f"Indirizzo: {sub_path}", center))
+    story.append(p("<i>Da consegnare al Coordinatore del Corso, Prof. Giuseppe Longo</i>", center))
+    story.append(Spacer(1, 10))
 
-    def add_justified_with_bold(parts, *, size=12):
-        """Add a justified paragraph built from (text, bold) tuples."""
-        p = doc.add_paragraph()
-        for text, is_bold in parts:
-            r = p.add_run(text)
-            r.font.name = 'Times New Roman'
-            if r._element.rPr is not None and r._element.rPr.rFonts is not None:
-                r._element.rPr.rFonts.set(qn('w:eastAsia'), 'Times New Roman')
-            r.font.size = Pt(size)
-            r.bold = bool(is_bold)
-        p.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-        return p
+    # Body text with bold fields
+    story.append(Paragraph(
+        "Il/La sottoscritto/a <b>%s</b>, matr. <b>%s</b>, nato/a a <b>%s</b> il <b>%s</b>, cell. <b>%s</b>, e-mail <b>%s</b>" % (name, matricula, pob, dob_str, phone, email),
+        body_just,
+    ))
+    story.append(Paragraph(
+        "iscritto/a nell’A.A. <b>%s</b> al <b>%s</b> anno del Corso di <b>%s</b> in <b>%s</b>, chiede alla Commissione di Coordinamento Didattico del Corso di Studio l’approvazione del presente Piano di Studio (PdS)." % (aa, year_of_degree, degree_type, degree_name),
+        body_just,
+    ))
+    story.append(Spacer(1, 8))
 
-    # Header block (centered, styled)
-    add_p("Università degli Studi di Napoli Federico II", align=WD_ALIGN_PARAGRAPH.CENTER, bold=True, size=14)
-    add_p("Corso di Studio", align=WD_ALIGN_PARAGRAPH.CENTER, size=12)
-    add_p(f"Laurea Magistrale in {degree_name}", align=WD_ALIGN_PARAGRAPH.CENTER, bold=True, size=12)
-    add_p("Piano di Studi", align=WD_ALIGN_PARAGRAPH.CENTER, bold=True, size=12)
-    add_p(f"A.A {academic_year_to_aa_format(academic_year)}", align=WD_ALIGN_PARAGRAPH.CENTER, size=12)
-
-    # Indirizzo (sub path)
-    add_p(f"Indirizzo: {sub_path}", align=WD_ALIGN_PARAGRAPH.CENTER, size=12)
-    add_p("Da consegnare al Coordinatore del Corso, Prof. Giuseppe Longo", align=WD_ALIGN_PARAGRAPH.CENTER, italic=True, size=11)
-    doc.add_paragraph("")
-
-    # Body text (anagraphica)
-    add_justified_with_bold([
-        ("Il/La sottoscritto/a ", False),
-        (name, True),
-        (", matr. ", False),
-        (matricula, True),
-        (", nato/a a ", False),
-        (pob, True),
-        (" il ", False),
-        (dob_str, True),
-        (", cell. ", False),
-        (phone, True),
-        (", e-mail ", False),
-        (email, True),
-    ], size=12)
-
-    add_justified_with_bold([
-        ("iscritto/a nell’A.A. ", False),
-        (academic_year_to_aa_format(academic_year), True),
-        (" al ", False),
-        (year_of_degree, True),
-        (" anno del Corso di ", False),
-        (degree_type, True),
-        (" in ", False),
-        (degree_name, True),
-        (", chiede alla Commissione di Coordinamento Didattico del Corso di Studio l’approvazione del presente Piano di Studio (PdS).", False),
-    ], size=12)
-
-    doc.add_paragraph("")
-
-    # Table (6 columns x 8 rows: 1 header + 7 items) with full borders
-    table = doc.add_table(rows=8, cols=6)
-    table.style = 'Table Grid'  # ensures visible borders on all cells
-    hdr = table.rows[0].cells
-    headers = [
+    # Table 6x8 (1 header + 7 rows)
+    data = [[
         "Insegnamento",
         "Corso Di Laurea Da Cui È Offerto",
         "Codice Insegnamento",
         "CFU",
         "Anno",
         "Semestre",
-    ]
-    for i, h in enumerate(headers):
-        # clear default content and add bold centered text
-        hdr[i].text = ''
-        p = hdr[i].paragraphs[0]
-        run = p.add_run(h)
-        run.bold = True
-        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    ]]
+    for c in courses[:7]:
+        data.append([c["name"], c["dept"], c["code"], str(c["cfu"]), str(c["year"]), str(c["semester"])])
 
-    # Fill rows with: 2 curricular + 2 free + 3 fixed = 7 rows
-    for i, c in enumerate(courses[:7], start=1):
-        row = table.rows[i].cells
-        # Insegnamento
-        row[0].text = c["name"]
-        # Dipartimento / Corso di laurea offerente
-        row[1].text = c["dept"]
-        # Codice
-        row[2].text = c["code"]
-        # CFU (center)
-        row[3].text = str(c["cfu"])
-        for para in row[3].paragraphs:
-            para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        # Anno (center)
-        row[4].text = str(c["year"])
-        for para in row[4].paragraphs:
-            para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        # Semestre (center)
-        row[5].text = str(c["semester"])
-        for para in row[5].paragraphs:
-            para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    tbl = PDFTable(data, repeatRows=1)
+    tbl.setStyle(TableStyle([
+        ("GRID", (0,0), (-1,-1), 0.5, colors.black),
+        ("BACKGROUND", (0,0), (-1,0), colors.whitesmoke),
+        ("ALIGN", (3,1), (5,-1), "CENTER"),
+        ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
+    ]))
+    story.append(tbl)
+    story.append(Spacer(1, 10))
 
-    doc.add_paragraph("")
-
-    # Modalità di compilazione (title bold)
-    add_p("Modalità di compilazione:", bold=True, size=12)
+    story.append(Paragraph("<b>Modalità di compilazione:</b>", styles["BodyText"]))
     bullets = [
         "Si possono includere nel PdS sia insegnamenti consigliati dal Corso di Studio (elencati e di immediata approvazione) sia insegnamenti offerti presso l’Ateneo (riportare nome insegnamento, codice esame, Corso di Studio) purchè costituiscano un percorso didattico complementare, coerente con il Corso di Studio",
         "É ammesso il superamento del numero dei CFU previsti",
     ]
     for b in bullets:
-        p = doc.add_paragraph(b)
-        p.style = 'List Bullet'
-        p.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+        story.append(Paragraph(b, body_just))
 
-    doc.add_paragraph("")
-    today_str = date.today().strftime("%d/%m/%Y")
-    # Signature line: left = firma dello studente, right = Napoli (date)
-    sig_table = doc.add_table(rows=1, cols=2)
-    try:
-        sig_table.style = 'Table Normal'
-    except Exception:
-        pass
-    left_p = sig_table.cell(0, 0).paragraphs[0]
-    lr = left_p.add_run("firma dello studente")
-    lr.italic = True
-    lr.font.name = 'Times New Roman'
-    lr.font.size = Pt(12)
-    left_p.alignment = WD_ALIGN_PARAGRAPH.LEFT
+    story.append(Spacer(1, 10))
 
-    right_p = sig_table.cell(0, 1).paragraphs[0]
-    rr = right_p.add_run(f"Napoli ({today_str})")
-    rr.font.name = 'Times New Roman'
-    rr.font.size = Pt(12)
-    right_p.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+    # Signature row as 2-col table
+    sig = PDFTable([["firma dello studente", f"Napoli ({date.today().strftime('%d/%m/%Y')})"]])
+    sig.setStyle(TableStyle([
+        ("ALIGN", (0,0), (0,0), "LEFT"),
+        ("ALIGN", (1,0), (1,0), "RIGHT"),
+    ]))
+    story.append(sig)
 
-    # Save to buffer
-    buf = BytesIO()
-    doc.save(buf)
+    def _watermark(c, _doc):
+        if watermark_text:
+            w, h = A4
+            c.saveState()
+            c.setFont("Helvetica-Bold", 48)
+            c.setFillColorRGB(0.8, 0.8, 0.8)
+            c.translate(w/2, h/2)
+            c.rotate(45)
+            c.drawCentredString(0, 0, watermark_text)
+            c.restoreState()
+
+    doc.build(story, onFirstPage=_watermark, onLaterPages=_watermark)
     buf.seek(0)
     return buf
 
 
-def convert_docx_to_pdf_bytes(docx_buf: BytesIO) -> BytesIO | None:
-    """Convert a DOCX buffer to PDF using docx2pdf (MS Word/AppleScript backend).
-    Returns a BytesIO with PDF bytes, or None if conversion failed or unavailable.
-    """
-    if _docx2pdf_convert is None:
-        return None
-    try:
-        with tempfile.TemporaryDirectory() as td:
-            in_path = os.path.join(td, "plan.docx")
-            out_path = os.path.join(td, "plan.pdf")
-            with open(in_path, "wb") as f:
-                f.write(docx_buf.getvalue())
-            _docx2pdf_convert(in_path, out_path)
-            if not os.path.exists(out_path):
-                return None
-            with open(out_path, "rb") as f:
-                pdf_bytes = f.read()
-            return BytesIO(pdf_bytes)
-    except Exception:
-        return None
-
-
+# ==================== App ====================
 def main():
     st.set_page_config(page_title="Master's Study Plan", page_icon="🎓", layout="wide")
     st.markdown(
@@ -566,14 +460,13 @@ def main():
             matricula = st.text_input("Matricula")
             dob = st.date_input(
                 "Date of Birth",
-                value=date(2000, 1, 1),  # default shown when the page loads
-                min_value=date(1900, 1, 1),  # allow going well before 2015
-                max_value=date.today(),  # no future DoB
+                value=date(2000, 1, 1),
+                min_value=date(1900, 1, 1),
+                max_value=date.today(),
                 help="Select your birth date (you can navigate years).",
             )
             email = st.text_input("Institutional Email")
         with cc:
-            # Academic year helper options
             today = date.today()
             start_year = today.year if today.month >= 7 else today.year - 1
             acad_options = [f"{start_year-1}-{start_year}", f"{start_year}-{start_year+1}", f"{start_year+1}-{start_year+2}"]
@@ -655,23 +548,16 @@ def main():
                 f"Planned CFUs so far: Curricular **{curricular_total}**, Free-choice **{free_total}**, Fixed components **{fixed_total}** → **{current_total}/60 CFU**"
             )
 
-            # PSI: warn if total is below 60
+            # PSI: must reach at least 60 CFU
             if plan_is_psi and current_total < 60:
                 st.error(f"Your selections total {current_total} CFU. In PSI you must reach at least 60 CFU. Please add/change free-choice exams.")
 
-            # Warn if total CFUs exceed 60 (e.g., due to a 12-CFU free-choice selection)
+            # Warn if total CFUs exceed 60
             if current_total > 60:
                 st.error(f"Your selections exceed 60 CFU by {current_total - 60} CFU. Please adjust your free-choice exams or consult the coordinator.")
 
             can_generate = (len(selected_free) == n_free_required) and (not plan_is_psi or current_total >= 60)
-            # Choose export format
-            export_format = st.radio("Output format", ["PDF", "Word (.docx)"], index=0, horizontal=True)
-            word_allowed = True
-            if export_format == "Word (.docx)":
-                word_pw = st.text_input("🔒 Password for Word export", type="password", key="wordpw")
-                word_allowed = teacher_logged_in or (word_pw == "ISPD03")
-            button_label = "📄 Generate PDF" if export_format == "PDF" else "📄 Generate Word (.docx)"
-            if can_generate and st.button(button_label, disabled=(export_format == "Word (.docx)" and not word_allowed)):
+            if can_generate and st.button("📄 Generate PDF"):
                 dob_str = dob.strftime("%d/%m/%Y") if hasattr(dob, 'strftime') else str(dob)
                 if plan_is_psi:
                     ordered_courses = [
@@ -683,7 +569,7 @@ def main():
                         FIXED_COMPONENTS[1],
                         FIXED_COMPONENTS[2],
                     ]
-                    st.warning("This is a Piano di Studi Individuale and must be approved by the Commissione. The document will be watermarked 'To Be Approved'.")
+                    st.warning("This is a Piano di Studi Individuale and must be approved by the Commissione. The PDF will be watermarked 'To Be Approved'.")
                 else:
                     ordered_courses = [
                         curr_courses[0],
@@ -694,7 +580,7 @@ def main():
                         FIXED_COMPONENTS[1],
                         FIXED_COMPONENTS[2],
                     ]
-                buf = build_study_plan_docx(
+                pdf_buf = build_study_plan_pdf(
                     name=name,
                     matricula=matricula,
                     pob=pob,
@@ -710,19 +596,8 @@ def main():
                     courses=ordered_courses,
                     watermark_text=("To Be Approved" if plan_is_psi else None),
                 )
-                if export_format == "PDF":
-                    pdf_buf = convert_docx_to_pdf_bytes(buf)
-                    if pdf_buf is None:
-                        st.error("PDF conversion failed or not available. Please install `docx2pdf` and ensure Microsoft Word is available on this machine.")
-                    else:
-                        fname = f"Piano_di_Studi_{matricula or 'studente'}.pdf"
-                        st.download_button("⬇ Download PDF", data=pdf_buf.getvalue(), file_name=fname, mime="application/pdf")
-                else:
-                    if not word_allowed:
-                        st.error("Incorrect password for Word export.")
-                    else:
-                        fname = f"Piano_di_Studi_{matricula or 'studente'}.docx"
-                        st.download_button("⬇ Download Word Document", data=buf, file_name=fname, mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+                fname = f"Piano_di_Studi_{matricula or 'studente'}.pdf"
+                st.download_button("⬇ Download PDF", data=pdf_buf.getvalue(), file_name=fname, mime="application/pdf")
             elif len(free_choice_selection_labels) != n_free_required:
                 st.warning(f"⚠ Please select exactly {n_free_required} free choice courses.")
 
