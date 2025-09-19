@@ -121,9 +121,9 @@ def build_study_plan_pdf(
         avail_w * 0.32,  # Insegnamento
         avail_w * 0.27,  # Offerto da
         avail_w * 0.15,  # Codice
-        avail_w * 0.08,  # CFU
+        avail_w * 0.07,  # CFU
         avail_w * 0.09,  # Anno
-        avail_w * 0.09,  # Semestre
+        avail_w * 0.10,  # Semestre
     ]
 
     header_style = ParagraphStyle(name="TblHeader", parent=styles["BodyText"], alignment=TA_CENTER, fontSize=9, leading=11)
