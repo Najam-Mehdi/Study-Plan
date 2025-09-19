@@ -4,18 +4,31 @@ from io import BytesIO
 from datetime import date
 from docx import Document
 from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.shared import Pt
+from docx.shared import Pt, RGBColor
 from docx.oxml.ns import qn
+import os, tempfile
+try:
+    from docx2pdf import convert as _docx2pdf_convert
+except Exception:
+    _docx2pdf_convert = None
 
 # -------------------- Data helpers --------------------
 def make_course(name: str, code: str, cfu: int = 6, dept: str = "DIETI", year: str = "Second", semester: str = "Second"):
+    # Normalize semester to words (first/second) and support 'first&second'
+    s = str(semester).strip()
+    mapping = {
+        "I": "first", "1": "first", "First": "first", "first": "first",
+        "II": "second", "2": "second", "Second": "second", "second": "second",
+        "first&Second": "first&second", "First&Second": "first&second", "first&second": "first&second",
+    }
+    sem_norm = mapping.get(s, s)
     return {
         "name": name,
         "code": code,
         "cfu": int(cfu),
         "dept": dept,
         "year": year,
-        "semester": semester,
+        "semester": sem_norm,
     }
 
 def course_label(c):
@@ -23,9 +36,9 @@ def course_label(c):
 
 # Fixed second-year components (now like normal courses)
 FIXED_COMPONENTS = [
-    make_course("Internship-Stage or Project", "U7901", 8),
-    make_course("Thesis and Final Exam", "U7902", 16),
-    make_course("Other activities", "U7903", 6),
+    make_course("ALTRE ATTIVITA", "12568", 6, "DIETI – LM Data Science", "Second", "second"),
+    make_course("TESI DI LAUREA", "U2848", 16, "DIETI – LM Data Science", "Second", "second"),
+    make_course("TIROCINIO/STAGE", "U4319", 8, "DIETI – LM Data Science", "Second", "second"),
 ]
 
 # -------------------- Document helpers --------------------
@@ -54,94 +67,204 @@ def build_study_plan_docx(
     main_path: str,
     sub_path: str,
     courses: list,
+    watermark_text: str = None,
 ) -> BytesIO:
     doc = Document()
 
-    # ---- Global font: Times New Roman 12 pt ----
-    normal = doc.styles["Normal"]
-    normal.font.name = "Times New Roman"
-    normal.font.size = Pt(12)
+    # Optional header watermark for PSI
+    if watermark_text:
+        try:
+            section = doc.sections[0]
+            header = section.header
+            hp = header.paragraphs[0] if header.paragraphs else header.add_paragraph()
+            hr = hp.add_run(watermark_text)
+            hr.font.size = Pt(40)
+            hr.bold = True
+            hr.font.color.rgb = RGBColor(200, 200, 200)
+            hp.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        except Exception:
+            pass
+
+    # --- Base font setup (adjustable) ---
     try:
-        normal._element.rPr.rFonts.set(qn('w:eastAsia'), 'Times New Roman')
+        normal = doc.styles['Normal']
+        normal.font.name = 'Times New Roman'
+        normal.font.size = Pt(12)
     except Exception:
         pass
 
-    # Header block (centered & bold)
-    header_lines = [
-        "Università degli Studi di Napoli Federico II",
-        "Corso di Studio",
-        f"Laurea Magistrale in {degree_name}",
-        "Piano di Studi",
-        f"A.A {academic_year_to_aa_format(academic_year)}",
-    ]
-    for line in header_lines:
+    def add_p(text, *, align=None, bold=False, italic=False, size=12):
         p = doc.add_paragraph()
-        run = p.add_run(line)
-        run.bold = True
-        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        run = p.add_run(text)
+        run.font.name = 'Times New Roman'
+        # Ensure font for EastAsia too (Word quirk)
+        if run._element.rPr is not None and run._element.rPr.rFonts is not None:
+            run._element.rPr.rFonts.set(qn('w:eastAsia'), 'Times New Roman')
+        run.font.size = Pt(size)
+        run.bold = bold
+        run.italic = italic
+        if align is not None:
+            p.alignment = align
+        return p
 
-    # Indirizzo (sub path) and coordinator line
-    doc.add_paragraph(f"Indirizzo: {sub_path}")
-    doc.add_paragraph("Da consegnare al Coordinatore del Corso, Prof. Giuseppe Longo")
+    def add_justified_with_bold(parts, *, size=12):
+        """Add a justified paragraph built from (text, bold) tuples."""
+        p = doc.add_paragraph()
+        for text, is_bold in parts:
+            r = p.add_run(text)
+            r.font.name = 'Times New Roman'
+            if r._element.rPr is not None and r._element.rPr.rFonts is not None:
+                r._element.rPr.rFonts.set(qn('w:eastAsia'), 'Times New Roman')
+            r.font.size = Pt(size)
+            r.bold = bool(is_bold)
+        p.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+        return p
+
+    # Header block (centered, styled)
+    add_p("Università degli Studi di Napoli Federico II", align=WD_ALIGN_PARAGRAPH.CENTER, bold=True, size=14)
+    add_p("Corso di Studio", align=WD_ALIGN_PARAGRAPH.CENTER, size=12)
+    add_p(f"Laurea Magistrale in {degree_name}", align=WD_ALIGN_PARAGRAPH.CENTER, bold=True, size=12)
+    add_p("Piano di Studi", align=WD_ALIGN_PARAGRAPH.CENTER, bold=True, size=12)
+    add_p(f"A.A {academic_year_to_aa_format(academic_year)}", align=WD_ALIGN_PARAGRAPH.CENTER, size=12)
+
+    # Indirizzo (sub path)
+    add_p(f"Indirizzo: {sub_path}", align=WD_ALIGN_PARAGRAPH.CENTER, size=12)
+    add_p("Da consegnare al Coordinatore del Corso, Prof. Giuseppe Longo", align=WD_ALIGN_PARAGRAPH.CENTER, italic=True, size=11)
     doc.add_paragraph("")
 
     # Body text (anagraphica)
-    doc.add_paragraph(
-        f"Il/La sottoscritto/a {name}, matr. {matricula}, nato/a a {pob} il {dob_str}, cell. {phone}, e-mail {email}"
-    )
+    add_justified_with_bold([
+        ("Il/La sottoscritto/a ", False),
+        (name, True),
+        (", matr. ", False),
+        (matricula, True),
+        (", nato/a a ", False),
+        (pob, True),
+        (" il ", False),
+        (dob_str, True),
+        (", cell. ", False),
+        (phone, True),
+        (", e-mail ", False),
+        (email, True),
+    ], size=12)
 
-    doc.add_paragraph(
-        f"iscritto/a nell’A.A. {academic_year_to_aa_format(academic_year)} al {year_of_degree} anno del Corso di {degree_type} in {degree_name}, "
-        "chiede alla Commissione di Coordinamento Didattico del Corso di Studio l’approvazione del presente Piano di Studio (PdS)."
-    )
+    add_justified_with_bold([
+        ("iscritto/a nell’A.A. ", False),
+        (academic_year_to_aa_format(academic_year), True),
+        (" al ", False),
+        (year_of_degree, True),
+        (" anno del Corso di ", False),
+        (degree_type, True),
+        (" in ", False),
+        (degree_name, True),
+        (", chiede alla Commissione di Coordinamento Didattico del Corso di Studio l’approvazione del presente Piano di Studio (PdS).", False),
+    ], size=12)
 
     doc.add_paragraph("")
 
-    # Table (6 columns x 8 rows: 1 header + 7 items)
+    # Table (6 columns x 8 rows: 1 header + 7 items) with full borders
     table = doc.add_table(rows=8, cols=6)
-    # visible borders like "All Borders"
-    table.style = 'Table Grid'
+    table.style = 'Table Grid'  # ensures visible borders on all cells
     hdr = table.rows[0].cells
-    hdr[0].text = "Insegnamento"
-    hdr[1].text = "Corso Di Laurea Da Cui È Offerto"
-    hdr[2].text = "Codice Insegnamento"
-    hdr[3].text = "CFU"
-    hdr[4].text = "Anno"
-    hdr[5].text = "Semestre"
+    headers = [
+        "Insegnamento",
+        "Corso Di Laurea Da Cui È Offerto",
+        "Codice Insegnamento",
+        "CFU",
+        "Anno",
+        "Semestre",
+    ]
+    for i, h in enumerate(headers):
+        # clear default content and add bold centered text
+        hdr[i].text = ''
+        p = hdr[i].paragraphs[0]
+        run = p.add_run(h)
+        run.bold = True
+        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
     # Fill rows with: 2 curricular + 2 free + 3 fixed = 7 rows
     for i, c in enumerate(courses[:7], start=1):
         row = table.rows[i].cells
+        # Insegnamento
         row[0].text = c["name"]
+        # Dipartimento / Corso di laurea offerente
         row[1].text = c["dept"]
+        # Codice
         row[2].text = c["code"]
+        # CFU (center)
         row[3].text = str(c["cfu"])
+        for para in row[3].paragraphs:
+            para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        # Anno (center)
         row[4].text = str(c["year"])
+        for para in row[4].paragraphs:
+            para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        # Semestre (center)
         row[5].text = str(c["semester"])
+        for para in row[5].paragraphs:
+            para.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
     doc.add_paragraph("")
 
-    # Modalità di compilazione
-    p = doc.add_paragraph()
-    r = p.add_run("Modalità di compilazione:")
-    r.bold = True
+    # Modalità di compilazione (title bold)
+    add_p("Modalità di compilazione:", bold=True, size=12)
     bullets = [
         "Si possono includere nel PdS sia insegnamenti consigliati dal Corso di Studio (elencati e di immediata approvazione) sia insegnamenti offerti presso l’Ateneo (riportare nome insegnamento, codice esame, Corso di Studio) purchè costituiscano un percorso didattico complementare, coerente con il Corso di Studio",
         "É ammesso il superamento del numero dei CFU previsti",
     ]
     for b in bullets:
-        doc.add_paragraph(b, style="List Bullet")
+        p = doc.add_paragraph(b)
+        p.style = 'List Bullet'
+        p.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
 
     doc.add_paragraph("")
     today_str = date.today().strftime("%d/%m/%Y")
-    doc.add_paragraph(f"Napoli ({today_str})")
-    doc.add_paragraph("firma dello studente")
+    # Signature line: left = firma dello studente, right = Napoli (date)
+    sig_table = doc.add_table(rows=1, cols=2)
+    try:
+        sig_table.style = 'Table Normal'
+    except Exception:
+        pass
+    left_p = sig_table.cell(0, 0).paragraphs[0]
+    lr = left_p.add_run("firma dello studente")
+    lr.italic = True
+    lr.font.name = 'Times New Roman'
+    lr.font.size = Pt(12)
+    left_p.alignment = WD_ALIGN_PARAGRAPH.LEFT
+
+    right_p = sig_table.cell(0, 1).paragraphs[0]
+    rr = right_p.add_run(f"Napoli ({today_str})")
+    rr.font.name = 'Times New Roman'
+    rr.font.size = Pt(12)
+    right_p.alignment = WD_ALIGN_PARAGRAPH.RIGHT
 
     # Save to buffer
     buf = BytesIO()
     doc.save(buf)
     buf.seek(0)
     return buf
+
+
+def convert_docx_to_pdf_bytes(docx_buf: BytesIO) -> BytesIO | None:
+    """Convert a DOCX buffer to PDF using docx2pdf (MS Word/AppleScript backend).
+    Returns a BytesIO with PDF bytes, or None if conversion failed or unavailable.
+    """
+    if _docx2pdf_convert is None:
+        return None
+    try:
+        with tempfile.TemporaryDirectory() as td:
+            in_path = os.path.join(td, "plan.docx")
+            out_path = os.path.join(td, "plan.pdf")
+            with open(in_path, "wb") as f:
+                f.write(docx_buf.getvalue())
+            _docx2pdf_convert(in_path, out_path)
+            if not os.path.exists(out_path):
+                return None
+            with open(out_path, "rb") as f:
+                pdf_bytes = f.read()
+            return BytesIO(pdf_bytes)
+    except Exception:
+        return None
 
 
 def main():
@@ -174,137 +297,119 @@ def main():
     # -------------------- Predefined catalog --------------------
     if "catalog" not in st.session_state:
         st.session_state.catalog = {
-            "Data Science for Information Technologies": {
-                "STATISTICS AND ROBOTICS FOR HEALTH": [
-                    make_course("Advanced Statistical Learning and modeling mod A & B", "U7001", 12),
-                    make_course("Robotics from Bio-Engineering", "U7002", 6),
+            "Curriculum FUNDAMENTAL SCIENCES": {
+                "FSE/PH - CURRICULUM FUNDAMENTAL SCIENCES/PHYSICS INSPIRED METHODOLOGIES": [
+                    make_course("Advanced Statistical Learning and Modeling", "U5450", 12, "DIETI – LM Data Science", "Second", "first"),
+                    make_course("Physics Informed Machine Learning", "U****", 6, "DIETI - LM Data Science", "Second", "second"),
                 ],
-                "DATA SCIENCE FOR SIGNAL AND VIDEO PROCESSING": [
-                    make_course("Information Theory and Signal Processing", "U7101", 12),
-                    make_course("Image and Video Processing for Autonomous driving", "U7102", 6),
-                ],
-                "DATA SCIENCE FOR DATA SECURITY": [
-                    make_course("Data security and computer forensic", "U7201", 12),
-                    make_course("Algorithm design", "U7202", 6),
-                ],
-                "DATA SCIENCE FOR INDUSTRIAL APPLICATIONS": [
-                    make_course("Advanced Statistical Learning and modeling mod A & B", "U7301", 12),
-                    make_course("Statistical methods for industrial process monitoring", "U7302", 6),
-                ],
-                "DATA SCIENCE FOR TEXT AND SPEECH PROCESSING": [
-                    make_course("Multimedia Information Retrieval & Text Mining", "U7401", 12),
-                    make_course("Natural language processing", "U7402", 6),
+                "PDS FSE/MM - CURRICULUM FUNDAMENTAL SCIENCES/MATHEMATICAL METHODOLOGIES": [
+                    make_course("Algorithms and Parallel Computing and Computational Complexity", "U5430", 12, "DMRC - LM Ing. Matematica D71", "Second", "first&second"),
+                    make_course("Operational Research", "U1624", 6, "DMRC - LM Ing. Matematica D71", "Second", "first"),
                 ],
             },
-            "Data Science for Public Administration, Economics and Management": {
-                "Data Science for Public Administration, Economics and Management": [
-                    make_course("Computational Statistics and Generalized Linear Models", "U7501", 12),
-                    make_course("Introduction to Economy and Econometrics", "U7502", 6),
-                ]
+            "Curriculum INFORMATION TECHNOLOGIES": {
+                "PDS ITE/TS - CURRICULUM INFORMATION TECHNOLOGIES/TEXT AND SPEECH PROCESSING": [
+                    make_course("Multimedia Information Retrieval and Text Mining", "U5441", 12, "DIETI – LM Data Science", "Second", "first&second"),
+                    make_course("Natural Language Processing", "U3539", 6, "DIETI – LM Informatica", "Second", "second"),
+                ],
+                "PDS ITE/SV - CURRICULUM INFORMATION TECHNOLOGIES/SIGNAL AND VIDEO PROCESSING": [
+                    make_course("Information Theory and Signals Theory", "U5444", 12, "DMRC - LM Ing. Matematica D71", "Second", "first&second"),
+                    make_course("Image and Video Processing for Autonomous Driving", "U3423", 6, "DII - LM Autonomous Vehicle Engineering", "Second", "second"),
+                ],
+                "PDS ITE/RS - CURRICULUM INFORMATION TECHNOLOGIES/ STATISTICS AND ROBOTICS FOR HEALTH": [
+                    make_course("Advanced Statistical Learning and Modeling", "U5450", 12, "DMRC - DIETI – LM Data Science", "Second", "first"),
+                    make_course("Robotics for Bioengineering", "U1579", 6, "LM Ing. Automazione e Robotica", "Second", "second"),
+                ],
+                "PDS ITE/IA - CURRICULUM INFORMATION TECHNOLOGIES/INDUSTRIAL APPLICATIONS": [
+                    make_course("Advanced Statistical Learning and Modeling", "U5450", 12, "DMRC - DIETI – LM Data Science", "Second", "first"),
+                    make_course("Statistical Methods for Industrial Process Monitoring", "U2659", 6, "DMRC - LM Ing. Matematica D71", "Second", "first"),
+                ],
+                "PDS ITE/AI - CURRICULUM INFORMATION TECHNOLOGIES/DATA SECURITY": [
+                    make_course("Data Security and Computer Forensics", "U5447", 12, "DMRC - DIETI – LM Informatica", "Second", "second"),
+                    make_course("Algorithm Design", "U3524", 6, "DIETI – LM Data Science", "Second", "first"),
+                ],
             },
-            "Data Science for Fundamental Sciences": {
-                "Mathematical Methodologies": [
-                    make_course("Algorithms and Parallel Computing-Computational Complexity", "U7701", 12),
-                    make_course("Operational Research", "U7702", 6),
-                ],
-                "Data science for hard sciences": [
-                    make_course("Machine Learning for Physics-Astroinformatics", "U7703", 12),
-                    make_course("Computational Methods for Physics", "U7704", 6),
-                ],
-                "Data Science for Life Sciences": [
-                    make_course("Biochemistry and Computational Biochemistry", "U7705", 12),
-                    make_course("Biologia Computazionale e Statistica", "U7706", 6),
+            "Curriculum PUBLIC ADMINISTRATION, ECONOMY AND MANAGEMENT – ECO": {
+                "PDS ECO - CURRICULUM PUBLIC ADMINISTRATION, ECONOMY AND MANAGEMENT": [
+                    make_course("Computational Statistical and Generalized Linear Models", "U5453", 12, "DIETI – LM Data Science", "Second", "first"),
+                    make_course("Financial Time Series Analysis", "U6373", 6, "DISES – LM Economics and Finance DH5", "Second", "first"),
                 ],
             },
-            "Data Science for Intelligent Systems": {
-                "Data Science for Intelligent Systems": [
-                    make_course("Computational Intelligence and Machine Learning for Physics", "U7801", 12),
-                    make_course("Computational Neurosciences", "U7802", 6),
-                ]
+            "Curriculum INTELLIGENT SYSTEMS - ISY": {
+                "PDS ISY - CURRICULUM INTELLIGENT SYSTEMS": [
+                    make_course("Computational Intelligence and Machine Learning for Physics", "U5460", 12, "DFEP – LM Physics and DIETI – LM Data Science", "Second", "second"),
+                    make_course("Generative Artificial Intelligence", "U****", 6, "DIETI – LM Data Science", "Second", "first"),
+                ],
             },
         }
 
     if "specializations" in st.session_state and isinstance(st.session_state["specializations"], dict):
-        it = st.session_state.catalog.get("Data Science for Information Technologies", {})
+        it = st.session_state.catalog.get("Curriculum INFORMATION TECHNOLOGIES", {})
         it.update(st.session_state.specializations)
-        st.session_state.catalog["Data Science for Information Technologies"] = it
+        st.session_state.catalog["Curriculum INFORMATION TECHNOLOGIES"] = it
         del st.session_state["specializations"]
 
     if "free_choice_courses" not in st.session_state:
-        base_free = [
-            make_course("Methods for Artificial Intelligence", "U7601", 6),
-            make_course("Human robot interaction", "U7602", 6),
-            make_course("Biometric Systems", "U7603", 6),
-            make_course("Computer graphics", "U7604", 6),
-            make_course("Algebraic methods for cryptography", "U7605", 6),
-            make_course("Environmental risk monitoring and evaluation", "U7606", 6),
-            make_course("Advanced non linear methods for industrial signal processing", "U7607", 6),
-            make_course("Techniques of Text analysis and Computational Linguistic", "U7608", 6),
-            make_course("Speech processing", "U7609", 6),
+        st.session_state.free_choice_courses = [
+            make_course("Advanced Statistical Learning and Modeling", "U5450", 12, "DIETI – LM Data Science", "Second", "I"),
+            make_course("AI Systems Engineering", "U5494", 6, "DIETI – LM Ing. Informatica", "Second", "I"),
+            make_course("Astroinformatics", "U1205", 6, "DFEP – LM Fisica", "Second", "II"),
+            make_course("Biometric Systems", "U3525", 6, "DIETI – LM Informatica", "Second", "II"),
+            make_course("Computational Intelligence", "U7219", 6, "DIETI – LM Data Science", "Second", "II"),
+            make_course("Computational Statistical and Generalized Linear Models", "U5453", 12, "DIETI – LM Data Science", "Second", "I"),
+            make_course("Computer Vision", "U3523", 6, "DIETI – LM Informatica", "Second", "I"),
+            make_course("Data Security", "U2652", 6, "DIETI – LM Data Science", "Second", "I"),
+            make_course("Data Visualization", "U2658", 6, "DIETI – LM Data Science", "Second", "II"),
+            make_course("Generative Artificial Intelligence", "U7215", 6, "DIETI – LM Data Science", "Second", "I"),
+            make_course("Financial Time Series Analysis", "U6373", 6, "DISES – LM Econ. and Finance", "Second", "I"),
+            make_course("Human robot interaction", "U3536", 6, "DIETI – LM Informatica", "Second", "I"),
+            make_course("Image and Video Processing for Autonomous Driving", "U3423", 6, "DII - LM Autonomous Vehicle Engineering", "Second", "II"),
+            make_course("Information Systems and Business Intelligence", "U3546", 6, "DIETI – LM Ing. Informatica", "Second", "I"),
+            make_course("Information Theory", "U1644", 6, "DMRC - LM Ing. Matematica", "Second", "I"),
+            make_course("Methods for Artificial Intelligence", "U3522", 6, "DIETI – LM Informatica", "Second", "II"),
+            make_course("Natural Language Processing", "U3539", 6, "DIETI – LM Informatica", "Second", "II"),
+            make_course("Physics Informed Machine Learning", "NI", 6, "DIETI – LM Data Science", "Second", "II"),
+            make_course("Preference learning", "U6641", 6, "DISES – LM Economia e Commercio", "Second", "I"),
+            make_course("Reliability and Risk in Aerospace Engineering", "U3835", 6, "DII – LM Ing. Aerospaziale", "Second", "II"),
+            make_course("Robotics Lab", "U2325", 6, "DIETI – LM Ing. Automazione e Robotica", "Second", "I"),
+            make_course("Software Architecture Design", "U5937", 6, "DIETI – LM Ing. Informatica", "Second", "I"),
+            make_course("Speech Processing", "U6636", 6, "DIETI – LM Data Science", "Second", "II"),
+            make_course("Statistical Methods for Industrial Process Monitoring", "U2659", 6, "DMRC - LM Ing. Matematica", "Second", "I"),
+            make_course("SW and methods for statistical analysis of economic data", "U6640", 6, "DIETI – LM Data Science", "Second", "II"),
+            make_course("Techniques of Text Analysis and Computational Linguistic", "U6635", 6, "DIETI – LM Data Science", "Second", "I"),
+            make_course("Text Mining", "U5902", 6, "DIETI – LM Data Science", "Second", "I"),
+            make_course("Advanced Microeconomics", "25880", 12, "DISES – LM Economics and Finance", "Second", "I"),
+            make_course("Advanced Macroeconomics", "25881", 12, "DISES – LM Economics and Finance", "Second", "II"),
+            make_course("Economics of Regulation", "27381", 6, "DISES – LM Economics and Finance", "Second", "II"),
+            make_course("Financial Econometrics", "27382", 6, "DISES – LM Economics and Finance", "Second", "II"),
+            make_course("Mathematics for Economics and Finance", "25884", 12, "DISES – LM Economics and Finance", "Second", "I"),
         ]
-        extra_names_codes = [
-            ("Statistical Methods for Evaluation", "U8001"),
-            ("Mathematics for Economics and Finance", "U8002"),
-            ("SW and methods for statistical analysis of economic data", "U8003"),
-            ("Preference Learning", "U8004"),
-            ("x-Informatics", "U8005"),
-            ("AI and Quantum Computing", "U8006"),
-            ("Real and Functional Analysis", "U8007"),
-            ("Signal Theory", "U8008"),
-            ("Information Theory", "U8009"),
-            ("Probability Theory", "U8010"),
-            ("Astroinformatics", "U8011"),
-            ("Computational Thermodynamics", "U8012"),
-            ("Quantum Computing Systems", "U8013"),
-            ("Mathematical Physics Models", "U8014"),
-            ("Fisica Medica", "U8015"),
-            ("Metodologie per l’analisi delle immagini", "U8016"),
-            ("Foundation of Robotics", "U8017"),
-            ("Machine Learning and Big Data per la salute", "U8018"),
-            ("Computational Chemistry", "U8019"),
-            ("Artificial Intelligence and Quantum Computing", "U8020"),
-            ("Machine Learning for Physics", "U8021"),
-        ]
-        names_set = {c["name"] for c in base_free}
-        for nm, code in extra_names_codes:
-            if nm not in names_set:
-                base_free.append(make_course(nm, code, 6))
-                names_set.add(nm)
-        st.session_state.free_choice_courses = base_free
 
     recommended_by_path = {
-        "Data Science for Information Technologies": {
-            "STATISTICS AND ROBOTICS FOR HEALTH": [
+        "Curriculum INFORMATION TECHNOLOGIES": {
+            "PDS ITE/TS - CURRICULUM INFORMATION TECHNOLOGIES/TEXT AND SPEECH PROCESSING": [
+                "Techniques of Text Analysis and Computational Linguistic",
+                "Speech Processing",
+            ],
+            "PDS ITE/SV - CURRICULUM INFORMATION TECHNOLOGIES/SIGNAL AND VIDEO PROCESSING": [
+                "Biometric Systems",
+                "Image and Video Processing for Autonomous Driving",
+            ],
+            "PDS ITE/RS - CURRICULUM INFORMATION TECHNOLOGIES/ STATISTICS AND ROBOTICS FOR HEALTH": [
                 "Methods for Artificial Intelligence",
                 "Human robot interaction",
             ],
-            "DATA SCIENCE FOR SIGNAL AND VIDEO PROCESSING": [
-                "Biometric Systems",
-                "Computer graphics",
-            ],
-            "DATA SCIENCE FOR DATA SECURITY": [
-                "Algebraic methods for cryptography",
-                "Free Choice (6 CFU)",
-            ],
-            "DATA SCIENCE FOR INDUSTRIAL APPLICATIONS": [
+            "PDS ITE/IA - CURRICULUM INFORMATION TECHNOLOGIES/INDUSTRIAL APPLICATIONS": [
                 "Environmental risk monitoring and evaluation",
-                "Advanced non linear methods for industrial signal processing",
+                "Statistical Methods for Industrial Process Monitoring",
             ],
-            "DATA SCIENCE FOR TEXT AND SPEECH PROCESSING": [
-                "Techniques of Text analysis and Computational Linguistic",
-                "Speech processing",
+            "PDS ITE/AI - CURRICULUM INFORMATION TECHNOLOGIES/DATA SECURITY": [
+                "Information Systems and Business Intelligence",
+                "Computer Vision",
             ],
         },
-        "Data Science for Public Administration, Economics and Management": {
-            "Data Science for Public Administration, Economics and Management": [
-                "Statistical Methods for Evaluation",
-                "Mathematics for Economics and Finance",
-                "SW and methods for statistical analysis of economic data",
-                "Preference Learning",
-            ]
-        },
-        "Data Science for Fundamental Sciences": {
-            "Mathematical Methodologies": [
+        "Curriculum FUNDAMENTAL SCIENCES": {
+            "PDS FSE/MM - CURRICULUM FUNDAMENTAL SCIENCES/MATHEMATICAL METHODOLOGIES": [
                 "x-Informatics",
                 "AI and Quantum Computing",
                 "Real and Functional Analysis",
@@ -312,27 +417,30 @@ def main():
                 "Information Theory",
                 "Probability Theory",
             ],
-            "Data science for hard sciences": [
+            "FSE/PH - CURRICULUM FUNDAMENTAL SCIENCES/PHYSICS INSPIRED METHODOLOGIES": [
                 "Astroinformatics",
                 "AI and Quantum Computing",
                 "Computational Thermodynamics",
                 "Quantum Computing Systems",
                 "Mathematical Physics Models",
             ],
-            "Data Science for Life Sciences": [
-                "Fisica Medica",
-                "Metodologie per l’analisi delle immagini",
-                "Foundation of Robotics",
-                "Machine Learning and Big Data per la salute",
-                "Computational Chemistry",
-            ],
         },
-        "Data Science for Intelligent Systems": {
-            "Data Science for Intelligent Systems": [
+        "Curriculum PUBLIC ADMINISTRATION, ECONOMY AND MANAGEMENT – ECO": {
+            "PDS ECO - CURRICULUM PUBLIC ADMINISTRATION, ECONOMY AND MANAGEMENT": [
+                "Mathematics for Economics and Finance",
+                "SW and methods for statistical analysis of economic data",
+                "Advanced Microeconomics",
+                "Advanced Macroeconomics",
+                "Economics of Regulation",
+                "Financial Econometrics",
+            ]
+        },
+        "Curriculum INTELLIGENT SYSTEMS - ISY": {
+            "PDS ISY - CURRICULUM INTELLIGENT SYSTEMS": [
                 "Astroinformatics",
                 "Quantum Computing Systems",
-                "Artificial Intelligence and Quantum Computing",
-                "Machine Learning for Physics",
+                "Computational Intelligence",
+                "Generative Artificial Intelligence",
             ]
         },
     }
@@ -455,7 +563,13 @@ def main():
             phone = st.text_input("Phone Number")
         with cb:
             matricula = st.text_input("Matricula")
-            dob = st.date_input("Date of Birth")
+            dob = st.date_input(
+                "Date of Birth",
+                value=date(2000, 1, 1),  # default shown when the page loads
+                min_value=date(1900, 1, 1),  # allow going well before 2015
+                max_value=date.today(),  # no future DoB
+                help="Select your birth date (you can navigate years).",
+            )
             email = st.text_input("Institutional Email")
         with cc:
             # Academic year helper options
@@ -468,6 +582,15 @@ def main():
             degree_name = st.text_input("Degree Name", value="DATA SCIENCE")
 
         st.markdown("---")
+
+        # Plan mode selector
+        plan_mode = st.radio(
+            "Plan mode:",
+            ["Standard (predefined path)", "Piano di Studi Individuale (PSI)"],
+            index=0,
+            help="PSI includes only Curricular Exam I from the chosen sub path; you will select 3 free-choice exams.",
+        )
+        plan_is_psi = plan_mode.endswith("(PSI)")
 
         main_paths = ["Select Main Path"] + list(st.session_state.catalog.keys())
         main_choice = st.selectbox(
@@ -493,30 +616,37 @@ def main():
         if main_choice != "Select Main Path" and sub_choice != "Select Sub Path":
             st.write("### 📚 Your Curricular Courses:")
             curr_courses = st.session_state.catalog[main_choice][sub_choice]
-            for idx, c in enumerate(curr_courses, start=1):
-                st.markdown(
-                    f"- **Curricular {idx}: {c['name']}** — `{c['code']}` • **{c['cfu']} CFU** • {c['dept']} • Year: {c['year']} • Semester: {c['semester']}"
-                )
+            if plan_is_psi:
+                c = curr_courses[0]
+                st.markdown(f"- **Curricular 1: {c['name']}** — `{c['code']}` • **{c['cfu']} CFU** • {c['dept']} • Year: {c['year']} • Semester: {c['semester']}")
+                st.info("You are in PSI mode: only Curricular Exam I is included. Select 3 free-choice exams to reach at least 60 CFU.")
+            else:
+                for idx, c in enumerate(curr_courses, start=1):
+                    st.markdown(
+                        f"- **Curricular {idx}: {c['name']}** — `{c['code']}` • **{c['cfu']} CFU** • {c['dept']} • Year: {c['year']} • Semester: {c['semester']}"
+                    )
 
             recs = recommended_by_path.get(main_choice, {}).get(sub_choice, [])
             if recs:
-                st.info("**Recommended free choice exams for this sub path:**\n- " + "\n- ".join(recs))
+                st.info("**Recommended free choice exams for this sub path:** - " + " - ".join(recs))
 
-            st.write("### 🎯 Select 2 Free Choice Courses:")
+            n_free_required = 3 if plan_is_psi else 2
+            st.write(f"### 🎯 Select {n_free_required} Free Choice Courses:")
             free_labels = [course_label(c) for c in st.session_state.free_choice_courses]
             free_choice_selection_labels = st.multiselect(
-                "Choose Free Courses (each 6 CFU):",
+                f"Choose {n_free_required} Free Courses:",
                 free_labels,
-                max_selections=2,
+                max_selections=n_free_required,
                 placeholder="Type to search free-choice courses…",
-                help="Start typing to search; select exactly 2.",
+                help=f"Start typing to search; select exactly {n_free_required}.",
             )
             selected_free = [
                 c for c in st.session_state.free_choice_courses if course_label(c) in free_choice_selection_labels
             ]
 
             fixed_total = sum(x["cfu"] for x in FIXED_COMPONENTS)
-            curricular_total = sum(c["cfu"] for c in curr_courses)
+            curricular_list = [curr_courses[0]] if plan_is_psi else curr_courses
+            curricular_total = sum(c["cfu"] for c in curricular_list)
             free_total = sum(c["cfu"] for c in selected_free)
             current_total = fixed_total + curricular_total + free_total
 
@@ -524,20 +654,45 @@ def main():
                 f"Planned CFUs so far: Curricular **{curricular_total}**, Free-choice **{free_total}**, Fixed components **{fixed_total}** → **{current_total}/60 CFU**"
             )
 
-            if any(c["cfu"] != 6 for c in selected_free):
-                st.warning("One or more selected free-choice courses are not 6 CFU. Program rule expects 2×6 CFU.")
+            # PSI: warn if total is below 60
+            if plan_is_psi and current_total < 60:
+                st.error(f"Your selections total {current_total} CFU. In PSI you must reach at least 60 CFU. Please add/change free-choice exams.")
 
-            if len(selected_free) == 2 and st.button("📄 Generate Word (DOCX)"):
+            # Warn if total CFUs exceed 60 (e.g., due to a 12-CFU free-choice selection)
+            if current_total > 60:
+                st.error(f"Your selections exceed 60 CFU by {current_total - 60} CFU. Please adjust your free-choice exams or consult the coordinator.")
+
+            can_generate = (len(selected_free) == n_free_required) and (not plan_is_psi or current_total >= 60)
+            # Choose export format
+            export_format = st.radio("Output format", ["PDF", "Word (.docx)"], index=0, horizontal=True)
+            word_allowed = True
+            if export_format == "Word (.docx)":
+                word_pw = st.text_input("🔒 Password for Word export", type="password", key="wordpw")
+                word_allowed = teacher_logged_in or (word_pw == "ISPD03")
+            button_label = "📄 Generate PDF" if export_format == "PDF" else "📄 Generate Word (.docx)"
+            if can_generate and st.button(button_label, disabled=(export_format == "Word (.docx)" and not word_allowed)):
                 dob_str = dob.strftime("%d/%m/%Y") if hasattr(dob, 'strftime') else str(dob)
-                ordered_courses = [
-                    curr_courses[0],
-                    curr_courses[1],
-                    selected_free[0],
-                    selected_free[1],
-                    FIXED_COMPONENTS[0],
-                    FIXED_COMPONENTS[1],
-                    FIXED_COMPONENTS[2],
-                ]
+                if plan_is_psi:
+                    ordered_courses = [
+                        curr_courses[0],
+                        selected_free[0],
+                        selected_free[1],
+                        selected_free[2],
+                        FIXED_COMPONENTS[0],
+                        FIXED_COMPONENTS[1],
+                        FIXED_COMPONENTS[2],
+                    ]
+                    st.warning("This is a Piano di Studi Individuale and must be approved by the Commissione. The document will be watermarked 'To Be Approved'.")
+                else:
+                    ordered_courses = [
+                        curr_courses[0],
+                        curr_courses[1],
+                        selected_free[0],
+                        selected_free[1],
+                        FIXED_COMPONENTS[0],
+                        FIXED_COMPONENTS[1],
+                        FIXED_COMPONENTS[2],
+                    ]
                 buf = build_study_plan_docx(
                     name=name,
                     matricula=matricula,
@@ -550,13 +705,25 @@ def main():
                     degree_type=degree_type,
                     degree_name=degree_name,
                     main_path=main_choice,
-                    sub_path=sub_choice,
+                    sub_path=(sub_choice + " — Piano di Studi Individuale" if plan_is_psi else sub_choice),
                     courses=ordered_courses,
+                    watermark_text=("To Be Approved" if plan_is_psi else None),
                 )
-                fname = f"Piano_di_Studi_{matricula or 'studente'}.docx"
-                st.download_button("⬇ Download Word Document", data=buf, file_name=fname, mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
-            elif len(free_choice_selection_labels) != 2:
-                st.warning("⚠ Please select exactly 2 free choice courses (6 CFU each).")
+                if export_format == "PDF":
+                    pdf_buf = convert_docx_to_pdf_bytes(buf)
+                    if pdf_buf is None:
+                        st.error("PDF conversion failed or not available. Please install `docx2pdf` and ensure Microsoft Word is available on this machine.")
+                    else:
+                        fname = f"Piano_di_Studi_{matricula or 'studente'}.pdf"
+                        st.download_button("⬇ Download PDF", data=pdf_buf.getvalue(), file_name=fname, mime="application/pdf")
+                else:
+                    if not word_allowed:
+                        st.error("Incorrect password for Word export.")
+                    else:
+                        fname = f"Piano_di_Studi_{matricula or 'studente'}.docx"
+                        st.download_button("⬇ Download Word Document", data=buf, file_name=fname, mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+            elif len(free_choice_selection_labels) != n_free_required:
+                st.warning(f"⚠ Please select exactly {n_free_required} free choice courses.")
 
 
 if __name__ == "__main__":
