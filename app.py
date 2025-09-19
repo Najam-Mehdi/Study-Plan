@@ -7,7 +7,7 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.shared import Pt, RGBColor
 from docx.oxml.ns import qn
 import os, tempfile
-from docx2pdf import convert as _docx2pdf_convert
+import docx2pdf
 try:
     from docx2pdf import convert as _docx2pdf_convert
 except Exception:
