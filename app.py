@@ -11,8 +11,16 @@ from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table as PDFTable, TableStyle
 
 # ==================== Data helpers ====================
-def make_course(name: str, code: str, cfu: int = 6, dept: str = "DIETI", year: str = "Second", semester: str = "Second"):
-    """Create a normalized course dict."""
+def make_course(
+    name: str,
+    code: str,
+    cfu: int = 6,
+    dept: str = "DIETI",
+    year: str = "Second",
+    semester: str = "Second",
+    links: list | None = None,
+):
+    """Create a normalized course dict (with optional list of links)."""
     s = str(semester).strip()
     mapping = {
         "I": "first", "1": "first", "First": "first", "first": "first",
@@ -27,6 +35,7 @@ def make_course(name: str, code: str, cfu: int = 6, dept: str = "DIETI", year: s
         "dept": dept,
         "year": year,
         "semester": sem_norm,
+        "links": links or [],
     }
 
 def course_label(c):
@@ -103,13 +112,11 @@ def build_study_plan_pdf(
         "iscritto/a nell’A.A. <b>%s</b> al <b>%s</b> anno del Corso di <b>%s</b> in <b>%s</b>, chiede alla Commissione di Coordinamento Didattico del Corso di Studio l’approvazione del presente Piano di Studio (PdS)." % (aa, year_of_degree, degree_type, degree_name),
         body_just,
     ))
-    story.append(Spacer(1, 8))
+    story.append(Spacer(1, 20))
 
     # Table 6x8 (1 header + 7 rows)
-    # Compute available width and set narrow, readable column widths
-    page_w, page_h = A4
+    page_w, _ = A4
     avail_w = page_w - doc.leftMargin - doc.rightMargin
-
     col_widths = [
         avail_w * 0.32,  # Insegnamento
         avail_w * 0.27,  # Offerto da
@@ -151,7 +158,7 @@ def build_study_plan_pdf(
         ("TOPPADDING", (0,0), (-1,-1), 4),
     ]))
     story.append(tbl)
-    story.append(Spacer(1, 10))
+    story.append(Spacer(1, 20))
 
     story.append(Paragraph("<b>Modalità di compilazione:</b>", styles["BodyText"]))
     bullets = [
@@ -161,11 +168,11 @@ def build_study_plan_pdf(
     for b in bullets:
         story.append(Paragraph(b, body_just))
 
-    story.append(Spacer(1, 10))
+    story.append(Spacer(1, 30))
 
     # Signature row as 2-col table, left/right aligned on a single line
     sig = PDFTable(
-        [["firma dello studente", f"Napoli ({date.today().strftime('%d/%m/%Y')})"]],
+        [[f"Napoli ({date.today().strftime('%d/%m/%Y')})", "firma dello studente"]],
         colWidths=[avail_w * 0.5, avail_w * 0.5],
     )
     sig.setStyle(TableStyle([
@@ -228,46 +235,154 @@ def main():
         st.session_state.catalog = {
             "Curriculum FUNDAMENTAL SCIENCES": {
                 "FSE/PH - CURRICULUM FUNDAMENTAL SCIENCES/PHYSICS INSPIRED METHODOLOGIES": [
-                    make_course("Advanced Statistical Learning and Modeling", "U5450", 12, "DIETI – LM Data Science", "Second", "first"),
-                    make_course("Physics Informed Machine Learning", "U****", 6, "DIETI - LM Data Science", "Second", "second"),
+                    make_course(
+                        "Advanced Statistical Learning and Modeling",
+                        "U5450", 12, "DIETI – LM Data Science", "Second", "first",
+                        links=[
+                            "https://www.docenti.unina.it/#!/professor/524f4245525441534943494c49414e4f53434c52525436344535324638333953/schede_insegnamento",
+                        ],
+                    ),
+                    make_course(
+                        "Physics Informed Machine Learning",
+                        "U****", 6, "DIETI - LM Data Science", "Second", "second",
+                        links=[],
+                    ),
                 ],
                 "PDS FSE/MM - CURRICULUM FUNDAMENTAL SCIENCES/MATHEMATICAL METHODOLOGIES": [
-                    make_course("Algorithms and Parallel Computing and Computational Complexity", "U5430", 12, "DMRC - LM Ing. Matematica D71", "Second", "first&second"),
-                    make_course("Operational Research", "U1624", 6, "DMRC - LM Ing. Matematica D71", "Second", "first"),
+                    make_course(
+                        "Algorithms and Parallel Computing and Computational Complexity",
+                        "U5430", 12, "DMRC - LM Ing. Matematica D71", "Second", "first&second",
+                        links=[
+                            "https://www.docenti.unina.it/#!/professor/414e49454c4c4f4d5552414e4f4d524e4e4c4c3731543230493037334c/schede_insegnamento",
+                            "https://www.docenti.unina.it/#!/professor/4749554c49414e4f4c414343455454494c4343474c4e3534443233463833394c/schede_insegnamento",
+                        ],
+                    ),
+                    make_course(
+                        "Operational Research",
+                        "U1624", 6, "DMRC - LM Ing. Matematica D71", "Second", "first",
+                        links=[
+                            "https://www.docenti.unina.it/#!/professor/44414e49454c454645524f4e4546524e444e4c38355232384638333944/programmi/shedainsegnamento",
+                        ],
+                    ),
                 ],
             },
             "Curriculum INFORMATION TECHNOLOGIES": {
                 "PDS ITE/TS - CURRICULUM INFORMATION TECHNOLOGIES/TEXT AND SPEECH PROCESSING": [
-                    make_course("Multimedia Information Retrieval and Text Mining", "U5441", 12, "DIETI – LM Data Science", "Second", "first&second"),
-                    make_course("Natural Language Processing", "U3539", 6, "DIETI – LM Informatica", "Second", "second"),
+                    make_course(
+                        "Multimedia Information Retrieval and Text Mining",
+                        "U5441", 12, "DIETI – LM Data Science", "Second", "first&second",
+                        links=[
+                            "https://www.docenti.unina.it/#!/professor/414e544f4e494f204d4152494152494e414c4449524e4c4e4e4d37355232374239363359/schede_insegnamento",
+                            "https://www.docenti.unina.it/#!/professor/414e4e41434f52415a5a4143525a4e4e4136344c35374c37383144/schede_insegnamento",
+                        ],
+                    ),
+                    make_course(
+                        "Natural Language Processing",
+                        "U3539", 6, "DIETI – LM Informatica", "Second", "second",
+                        links=[
+                            "https://www.docenti.unina.it/#!/professor/4652414e434553434f43555455474e4f435447464e4336304d31364638333948/programmi/shedainsegnamento",
+                        ],
+                    ),
                 ],
                 "PDS ITE/SV - CURRICULUM INFORMATION TECHNOLOGIES/SIGNAL AND VIDEO PROCESSING": [
-                    make_course("Information Theory and Signals Theory", "U5444", 12, "DMRC - LM Ing. Matematica D71", "Second", "first&second"),
-                    make_course("Image and Video Processing for Autonomous Driving", "U3423", 6, "DII - LM Autonomous Vehicle Engineering", "Second", "second"),
+                    make_course(
+                        "Information Theory and Signals Theory",
+                        "U5444", 12, "DMRC - LM Ing. Matematica D71", "Second", "first&second",
+                        links=[
+                            "https://www.docenti.unina.it/#!/professor/414e544f4e4941204d4152494154554c494e4f544c4e4e4e4d3731503532463833394e/programmi/programma",
+                            "https://www.docenti.unina.it/#!/professor/4d4152494f54414e4441544e444d524136334c31354135313246/programmi/shedainsegnamento",
+                        ],
+                    ),
+                    make_course(
+                        "Image and Video Processing for Autonomous Driving",
+                        "U3423", 6, "DII - LM Autonomous Vehicle Engineering", "Second", "second",
+                        links=[
+                            "https://www.docenti.unina.it/#!/professor/4c55495341564552444f4c4956415652444c535537324d36324c38343551/programmi/shedainsegnamento",
+                        ],
+                    ),
                 ],
                 "PDS ITE/RS - CURRICULUM INFORMATION TECHNOLOGIES/ STATISTICS AND ROBOTICS FOR HEALTH": [
-                    make_course("Advanced Statistical Learning and Modeling", "U5450", 12, "DMRC - DIETI – LM Data Science", "Second", "first"),
-                    make_course("Robotics for Bioengineering", "U1579", 6, "LM Ing. Automazione e Robotica", "Second", "second"),
+                    make_course(
+                        "Advanced Statistical Learning and Modeling",
+                        "U5450", 12, "DMRC - DIETI – LM Data Science", "Second", "first",
+                        links=[
+                            "https://www.docenti.unina.it/#!/professor/524f4245525441534943494c49414e4f53434c52525436344535324638333953/schede_insegnamento",
+                        ],
+                    ),
+                    make_course(
+                        "Robotics for Bioengineering",
+                        "U1579", 6, "LM Ing. Automazione e Robotica", "Second", "second",
+                        links=[
+                            "https://www.docenti.unina.it/#!/professor/46414e4e59464943554349454c4c4f464343464e5937345236304639313248/programmi/shedainsegnamento",
+                        ],
+                    ),
                 ],
                 "PDS ITE/IA - CURRICULUM INFORMATION TECHNOLOGIES/INDUSTRIAL APPLICATIONS": [
-                    make_course("Advanced Statistical Learning and Modeling", "U5450", 12, "DMRC - DIETI – LM Data Science", "Second", "first"),
-                    make_course("Statistical Methods for Industrial Process Monitoring", "U2659", 6, "DMRC - LM Ing. Matematica D71", "Second", "first"),
+                    make_course(
+                        "Advanced Statistical Learning and Modeling",
+                        "U5450", 12, "DMRC - DIETI – LM Data Science", "Second", "first",
+                        links=[
+                            "https://www.docenti.unina.it/#!/professor/524f4245525441534943494c49414e4f53434c52525436344535324638333953/schede_insegnamento",
+                        ],
+                    ),
+                    make_course(
+                        "Statistical Methods for Industrial Process Monitoring",
+                        "U2659", 6, "DMRC - LM Ing. Matematica D71", "Second", "first",
+                        links=[
+                            "https://www.docenti.unina.it/#!/professor/414e544f4e494f4c45504f52454c50524e544e37394c32374137383353/programmi/programma",
+                        ],
+                    ),
                 ],
                 "PDS ITE/AI - CURRICULUM INFORMATION TECHNOLOGIES/DATA SECURITY": [
-                    make_course("Data Security and Computer Forensics", "U5447", 12, "DMRC - DIETI – LM Informatica", "Second", "second"),
-                    make_course("Algorithm Design", "U3524", 6, "DIETI – LM Data Science", "Second", "first"),
+                    make_course(
+                        "Data Security and Computer Forensics",
+                        "U5447", 12, "DMRC - DIETI – LM Informatica", "Second", "second",
+                        links=[
+                            "https://www.docenti.unina.it/#!/professor/524f424552544f4e4154454c4c414e544c52525438334c32334637393953/schede_insegnamento",
+                            "https://www.docenti.unina.it/#!/professor/4c4f52454e5a4f4c41555241544f4c52544c4e5a37304332325a3133335a/programmi/shedainsegnamento",
+                        ],
+                    ),
+                    make_course(
+                        "Algorithm Design",
+                        "U3524", 6, "DIETI – LM Data Science", "Second", "first",
+                        links=[
+                            "https://www.docenti.unina.it/#!/professor/464142494f4d4f47415645524f4d475646424138334533314837303341/programmi/shedainsegnamento",
+                        ],
+                    ),
                 ],
             },
             "Curriculum PUBLIC ADMINISTRATION, ECONOMY AND MANAGEMENT – ECO": {
                 "PDS ECO - CURRICULUM PUBLIC ADMINISTRATION, ECONOMY AND MANAGEMENT": [
-                    make_course("Computational Statistical and Generalized Linear Models", "U5453", 12, "DIETI – LM Data Science", "Second", "first"),
-                    make_course("Financial Time Series Analysis", "U6373", 6, "DISES – LM Economics and Finance DH5", "Second", "first"),
+                    make_course(
+                        "Computational Statistical and Generalized Linear Models",
+                        "U5453", 12, "DIETI – LM Data Science", "Second", "first",
+                        links=[
+                            "https://www.docenti.unina.it/#!/professor/414e544f4e494f4427414d42524f53494f444d424e544e3730533239413738334e/schede_insegnamento",
+                        ],
+                    ),
+                    make_course(
+                        "Financial Time Series Analysis",
+                        "U6373", 6, "DISES – LM Economics and Finance DH5", "Second", "first",
+                        links=[
+                            "https://www.docenti.unina.it/#!/professor/4341524d454c41494f52494f52494f434d4c38354336324638333951/schede_insegnamento",
+                        ],
+                    ),
                 ],
             },
             "Curriculum INTELLIGENT SYSTEMS - ISY": {
                 "PDS ISY - CURRICULUM INTELLIGENT SYSTEMS": [
-                    make_course("Computational Intelligence and Machine Learning for Physics", "U5460", 12, "DFEP – LM Physics and DIETI – LM Data Science", "Second", "second"),
-                    make_course("Generative Artificial Intelligence", "U****", 6, "DIETI – LM Data Science", "Second", "first"),
+                    make_course(
+                        "Computational Intelligence and Machine Learning for Physics",
+                        "U5460", 12, "DFEP – LM Physics and DIETI – LM Data Science", "Second", "second",
+                        links=[
+                            "https://www.docenti.unina.it/#!/professor/46455244494e414e444f4449204d415254494e4f444d5246444e3635433235463833394b/programmi/shedainsegnamento",
+                        ],
+                    ),
+                    make_course(
+                        "Generative Artificial Intelligence",
+                        "U****", 6, "DIETI – LM Data Science", "Second", "first",
+                        links=[],
+                    ),
                 ],
             },
         }
@@ -280,106 +395,50 @@ def main():
 
     if "free_choice_courses" not in st.session_state:
         st.session_state.free_choice_courses = [
-            make_course("Advanced Statistical Learning and Modeling", "U5450", 12, "DIETI – LM Data Science", "Second", "I"),
-            make_course("AI Systems Engineering", "U5494", 6, "DIETI – LM Ing. Informatica", "Second", "I"),
-            make_course("Astroinformatics", "U1205", 6, "DFEP – LM Fisica", "Second", "II"),
-            make_course("Biometric Systems", "U3525", 6, "DIETI – LM Informatica", "Second", "II"),
-            make_course("Computational Intelligence", "U7219", 6, "DIETI – LM Data Science", "Second", "II"),
-            make_course("Computational Statistical and Generalized Linear Models", "U5453", 12, "DIETI – LM Data Science", "Second", "I"),
-            make_course("Computer Vision", "U3523", 6, "DIETI – LM Informatica", "Second", "I"),
-            make_course("Data Security", "U2652", 6, "DIETI – LM Data Science", "Second", "I"),
-            make_course("Data Visualization", "U2658", 6, "DIETI – LM Data Science", "Second", "II"),
-            make_course("Generative Artificial Intelligence", "U7215", 6, "DIETI – LM Data Science", "Second", "I"),
-            make_course("Financial Time Series Analysis", "U6373", 6, "DISES – LM Econ. and Finance", "Second", "I"),
-            make_course("Human robot interaction", "U3536", 6, "DIETI – LM Informatica", "Second", "I"),
-            make_course("Image and Video Processing for Autonomous Driving", "U3423", 6, "DII - LM Autonomous Vehicle Engineering", "Second", "II"),
-            make_course("Information Systems and Business Intelligence", "U3546", 6, "DIETI – LM Ing. Informatica", "Second", "I"),
-            make_course("Information Theory", "U1644", 6, "DMRC - LM Ing. Matematica", "Second", "I"),
-            make_course("Methods for Artificial Intelligence", "U3522", 6, "DIETI – LM Informatica", "Second", "II"),
-            make_course("Natural Language Processing", "U3539", 6, "DIETI – LM Informatica", "Second", "II"),
-            make_course("Physics Informed Machine Learning", "NI", 6, "DIETI – LM Data Science", "Second", "II"),
-            make_course("Preference learning", "U6641", 6, "DISES – LM Economia e Commercio", "Second", "I"),
-            make_course("Reliability and Risk in Aerospace Engineering", "U3835", 6, "DII – LM Ing. Aerospaziale", "Second", "II"),
-            make_course("Robotics Lab", "U2325", 6, "DIETI – LM Ing. Automazione e Robotica", "Second", "I"),
-            make_course("Software Architecture Design", "U5937", 6, "DIETI – LM Ing. Informatica", "Second", "I"),
-            make_course("Speech Processing", "U6636", 6, "DIETI – LM Data Science", "Second", "II"),
-            make_course("Statistical Methods for Industrial Process Monitoring", "U2659", 6, "DMRC - LM Ing. Matematica", "Second", "I"),
-            make_course("SW and methods for statistical analysis of economic data", "U6640", 6, "DIETI – LM Data Science", "Second", "II"),
-            make_course("Techniques of Text Analysis and Computational Linguistic", "U6635", 6, "DIETI – LM Data Science", "Second", "I"),
-            make_course("Text Mining", "U5902", 6, "DIETI – LM Data Science", "Second", "I"),
-            make_course("Advanced Microeconomics", "25880", 12, "DISES – LM Economics and Finance", "Second", "I"),
-            make_course("Advanced Macroeconomics", "25881", 12, "DISES – LM Economics and Finance", "Second", "II"),
-            make_course("Economics of Regulation", "27381", 6, "DISES – LM Economics and Finance", "Second", "II"),
-            make_course("Financial Econometrics", "27382", 6, "DISES – LM Economics and Finance", "Second", "II"),
-            make_course("Mathematics for Economics and Finance", "25884", 12, "DISES – LM Economics and Finance", "Second", "I"),
+            make_course("Advanced Statistical Learning and Modeling", "U5450", 12, "DIETI – LM Data Science", "Second", "I", links=["https://www.docenti.unina.it/#!/professor/524f4245525441534943494c49414e4f53434c52525436344535324638333953/schede_insegnamento"]),
+            make_course("AI Systems Engineering", "U5494", 6, "DIETI – LM Ing. Informatica", "Second", "I", links=["https://www.docenti.unina.it/#!/professor/524f424552544f5049455452414e54554f4e4f50545252525438305332344632323448/programmi/shedainsegnamento"]),
+            make_course("Astroinformatics", "U1205", 6, "DFEP – LM Fisica", "Second", "II", links=["https://www.docenti.unina.it/#!/professor/53544546414e4f434156554f544943565453464e38324130374837303359/programmi"]),
+            make_course("Biometric Systems", "U3525", 6, "DIETI – LM Informatica", "Second", "II", links=["https://www.docenti.unina.it/#!/professor/44414e49454c52494343494f524343444e4c37384831365a3131344d/programmi"]),
+            make_course("Computational Intelligence", "U7219", 6, "DIETI – LM Data Science", "Second", "II", links=["https://www.docenti.unina.it/#!/professor/46455244494e414e444f4449204d415254494e4f444d5246444e3635433235463833394b/programmi/shedainsegnamento"]),
+            make_course("Computational Statistical and Generalized Linear Models", "U5453", 12, "DIETI – LM Data Science", "Second", "I", links=["https://www.docenti.unina.it/#!/professor/414e544f4e494f4427414d42524f53494f444d424e544e3730533239413738334e/schede_insegnamento"]),
+            make_course("Computer Vision", "U3523", 6, "DIETI – LM Informatica", "Second", "I", links=["https://www.docenti.unina.it/#!/professor/4652414e434553434f495347524f27534752464e4336365432364732373341/programmi/shedainsegnamento"]),
+            make_course("Data Security", "U2652", 6, "DIETI – LM Data Science", "Second", "I", links=["https://www.docenti.unina.it/#!/professor/524f424552544f4e4154454c4c414e544c52525438334c32334637393953/programmi/shedainsegnamento"]),
+            make_course("Data Visualization", "U2658", 6, "DIETI – LM Data Science", "Second", "II", links=["https://www.docenti.unina.it/#!/professor/524f424552544f5049455452414e54554f4e4f50545252525438305332344632323448/programmi/shedainsegnamento"]),
+            make_course("Generative Artificial Intelligence", "U7215", 6, "DIETI – LM Data Science", "Second", "I", links=[]),
+            make_course("Financial Time Series Analysis", "U6373", 6, "DISES – LM Econ. and Finance", "Second", "I", links=["https://www.docenti.unina.it/#!/professor/4341524d454c41494f52494f52494f434d4c38354336324638333951/schede_insegnamento"]),
+            make_course("Human robot interaction", "U3536", 6, "DIETI – LM Informatica", "Second", "I", links=["https://www.docenti.unina.it/#!/professor/53494c564941524f535349525353534c563737453536423936334e/programmi/shedainsegnamento"]),
+            make_course("Image and Video Processing for Autonomous Driving", "U3423", 6, "DII - LM Autonomous Vehicle Engineering", "Second", "II", links=["https://www.docenti.unina.it/#!/professor/4c55495341564552444f4c4956415652444c535537324d36324c38343551/programmi/shedainsegnamento"]),
+            make_course("Information Systems and Business Intelligence", "U3546", 6, "DIETI – LM Ing. Informatica", "Second", "I", links=["https://www.docenti.unina.it/#!/professor/464c4f5241414d41544f4d5441464c5237395036314c3235394c/schede_insegnamento"]),
+            make_course("Information Theory", "U1644", 6, "DMRC - LM Ing. Matematica", "Second", "I", links=["https://www.docenti.unina.it/#!/professor/414e544f4e4941204d4152494154554c494e4f544c4e4e4e4d3731503532463833394e/schede_insegnamento"]),
+            make_course("Methods for Artificial Intelligence", "U3522", 6, "DIETI – LM Informatica", "Second", "II", links=["https://www.docenti.unina.it/#!/professor/53494c564941524f535349525353534c563737453536423936334e/programmi/shedainsegnamento"]),
+            make_course("Natural Language Processing", "U3539", 6, "DIETI – LM Informatica", "Second", "II", links=["https://www.docenti.unina.it/#!/professor/4652414e434553434f43555455474e4f435447464e4336304d31364638333948/programmi/shedainsegnamento"]),
+            make_course("Physics Informed Machine Learning", "U****", 6, "DIETI – LM Data Science", "Second", "II", links=[]),
+            make_course("Preference learning", "U6641", 6, "DISES – LM Economia e Commercio", "Second", "I", links=[]),
+            make_course("Reliability and Risk in Aerospace Engineering", "U3835", 6, "DII – LM Ing. Aerospaziale", "Second", "II", links=["https://www.docenti.unina.it/#!/professor/4d415353494d494c49414e4f47494f5247494f4752474d534d3636523133463833394d/programmi/shedainsegnamento"]),
+            make_course("Robotics Lab", "U2325", 6, "DIETI – LM Ing. Automazione e Robotica", "Second", "I", links=["https://www.docenti.unina.it/#!/professor/4a4f4e415448414e4341434143454343434a544838375431334638333949/programmi/programma"]),
+            make_course("Software Architecture Design", "U5937", 6, "DIETI – LM Ing. Informatica", "Second", "I", links=["https://www.docenti.unina.it/#!/professor/414e4e4120524954414641534f4c494e4f46534c4e525436355334374639313245/schede_insegnamento"]),
+            make_course("Speech Processing", "U6636", 6, "DIETI – LM Data Science", "Second", "II", links=["https://www.docenti.unina.it/#!/professor/4652414e434553434f43555455474e4f435447464e4336304d31364638333948/schede_insegnamento"]),
+            make_course("Statistical Methods for Industrial Process Monitoring", "U2659", 6, "DMRC - LM Ing. Matematica", "Second", "I", links=["https://www.docenti.unina.it/#!/professor/414e544f4e494f4c45504f52454c50524e544e37394c32374137383353/programmi/programma"]),
+            make_course("SW and methods for statistical analysis of economic data", "U6640", 6, "DIETI – LM Data Science", "Second", "II", links=["https://www.docenti.unina.it/#!/professor/414c464f4e534f494f44494345204427454e5a414443444c4e5337374c31384638333946/schede_insegnamento"]),
+            make_course("Techniques of Text Analysis and Computational Linguistic", "U6635", 6, "DIETI – LM Data Science", "Second", "I", links=["https://www.docenti.unina.it/#!/professor/4652414e434553434f43555455474e4f435447464e4336304d31364638333948/programmi/shedainsegnamento"]),
+            make_course("Text Mining", "U5902", 6, "DIETI – LM Data Science", "Second", "I", links=["https://www.docenti.unina.it/#!/professor/414e4e41434f52415a5a4143525a4e4e4136344c35374c37383144/schede_insegnamento"]),
+            make_course("Advanced Microeconomics", "25880", 12, "DISES – LM Economics and Finance", "Second", "I", links=["https://www.docenti.unina.it/#!/professor/47494f56414e4e49494d4d4f5244494e4f4d4d52474e4e36394530384732373359/programmi/programma"]),
+            make_course("Advanced Macroeconomics", "25881", 12, "DISES – LM Economics and Finance", "Second", "II", links=["https://www.docenti.unina.it/#!/professor/54554c4c494f4a415050454c4c494a5050544c4c35365032324638333955/programmi/shedainsegnamento"]),
+            make_course("Economics of Regulation", "27381", 6, "DISES – LM Economics and Finance", "Second", "II", links=["https://www.docenti.unina.it/#!/professor/4d4152434f5041474e4f5a5a4950474e4d524337324331344638333944/programmi/shedainsegnamento"]),
+            make_course("Financial Econometrics", "27382", 6, "DISES – LM Economics and Finance", "Second", "II", links=["https://www.docenti.unina.it/#!/professor/414e4e414c49534153434f474e414d49474c494f5343474e4c5338355234314638333953/programmi/shedainsegnamento"]),
+            make_course("Mathematics for Economics and Finance", "25884", 12, "DISES – LM Economics and Finance", "Second", "I", links=["https://www.docenti.unina.it/#!/professor/414348494c4c45424153494c4542534c434c4c3538413231493239334f/programmi/shedainsegnamento"]),
+            # >>> Change 1: added new free-choice course U6435 <<<
+            make_course("Metodi statistici per la ricerca sociale", "U6435", 6, "DISES – LM Economia e Commercio", "Second", "I",
+                        links=["https://www.docenti.unina.it/#!/professor/4d415353494d4f415249415241494d534d37335432374638333949/programmi/shedainsegnamento"]),
         ]
 
-    recommended_by_path = {
-        "Curriculum INFORMATION TECHNOLOGIES": {
-            "PDS ITE/TS - CURRICULUM INFORMATION TECHNOLOGIES/TEXT AND SPEECH PROCESSING": [
-                "Techniques of Text Analysis and Computational Linguistic",
-                "Speech Processing",
-            ],
-            "PDS ITE/SV - CURRICULUM INFORMATION TECHNOLOGIES/SIGNAL AND VIDEO PROCESSING": [
-                "Biometric Systems",
-                "Image and Video Processing for Autonomous Driving",
-            ],
-            "PDS ITE/RS - CURRICULUM INFORMATION TECHNOLOGIES/ STATISTICS AND ROBOTICS FOR HEALTH": [
-                "Methods for Artificial Intelligence",
-                "Human robot interaction",
-            ],
-            "PDS ITE/IA - CURRICULUM INFORMATION TECHNOLOGIES/INDUSTRIAL APPLICATIONS": [
-                "Environmental risk monitoring and evaluation",
-                "Statistical Methods for Industrial Process Monitoring",
-            ],
-            "PDS ITE/AI - CURRICULUM INFORMATION TECHNOLOGIES/DATA SECURITY": [
-                "Information Systems and Business Intelligence",
-                "Computer Vision",
-            ],
-        },
-        "Curriculum FUNDAMENTAL SCIENCES": {
-            "PDS FSE/MM - CURRICULUM FUNDAMENTAL SCIENCES/MATHEMATICAL METHODOLOGIES": [
-                "x-Informatics",
-                "AI and Quantum Computing",
-                "Real and Functional Analysis",
-                "Signal Theory",
-                "Information Theory",
-                "Probability Theory",
-            ],
-            "FSE/PH - CURRICULUM FUNDAMENTAL SCIENCES/PHYSICS INSPIRED METHODOLOGIES": [
-                "Astroinformatics",
-                "AI and Quantum Computing",
-                "Computational Thermodynamics",
-                "Quantum Computing Systems",
-                "Mathematical Physics Models",
-            ],
-        },
-        "Curriculum PUBLIC ADMINISTRATION, ECONOMY AND MANAGEMENT – ECO": {
-            "PDS ECO - CURRICULUM PUBLIC ADMINISTRATION, ECONOMY AND MANAGEMENT": [
-                "Mathematics for Economics and Finance",
-                "SW and methods for statistical analysis of economic data",
-                "Advanced Microeconomics",
-                "Advanced Macroeconomics",
-                "Economics of Regulation",
-                "Financial Econometrics",
-            ]
-        },
-        "Curriculum INTELLIGENT SYSTEMS - ISY": {
-            "PDS ISY - CURRICULUM INTELLIGENT SYSTEMS": [
-                "Astroinformatics",
-                "Quantum Computing Systems",
-                "Computational Intelligence",
-                "Generative Artificial Intelligence",
-            ]
-        },
-    }
-
     # -------------------- Catalog overview --------------------
-    with st.expander("📚 Catalog Overview (Codes, CFUs, Dept, Year, Semester)"):
+    with st.expander("📚 Catalog Overview (Codes, CFUs, Dept, Year, Semester, Links)"):
         rows = []
         for main_path, subpaths in st.session_state.catalog.items():
             for sub_path, courses in subpaths.items():
                 for idx, c in enumerate(courses, start=1):
+                    links = c.get("links", [])
                     rows.append({
                         "Type": "Curricular",
                         "Main Path": main_path,
@@ -391,8 +450,11 @@ def main():
                         "Dept": c["dept"],
                         "Year": c["year"],
                         "Semester": c["semester"],
+                        "Link 1": links[0] if len(links) > 0 else None,
+                        "Link 2": links[1] if len(links) > 1 else None,
                     })
         for c in st.session_state.free_choice_courses:
+            links = c.get("links", [])
             rows.append({
                 "Type": "Free Choice",
                 "Main Path": "—",
@@ -404,6 +466,8 @@ def main():
                 "Dept": c["dept"],
                 "Year": c["year"],
                 "Semester": c["semester"],
+                "Link 1": links[0] if len(links) > 0 else None,
+                "Link 2": links[1] if len(links) > 1 else None,
             })
         for c in FIXED_COMPONENTS:
             rows.append({
@@ -417,9 +481,18 @@ def main():
                 "Dept": c["dept"],
                 "Year": c["year"],
                 "Semester": c["semester"],
+                "Link 1": None,
+                "Link 2": None,
             })
         df = pd.DataFrame(rows)
-        st.dataframe(df, use_container_width=True)
+        st.dataframe(
+            df,
+            use_container_width=True,
+            column_config={
+                "Link 1": st.column_config.LinkColumn("Link 1", display_text="Open"),
+                "Link 2": st.column_config.LinkColumn("Link 2", display_text="Open"),
+            },
+        )
 
     # -------------------- Teacher tools --------------------
     if teacher_logged_in:
@@ -442,6 +515,8 @@ def main():
                     c1_dept = st.text_input("Course I Department", value="DIETI", key="c1d")
                     c1_year = st.selectbox("Course I Year", ["First", "Second"], index=1, key="c1y")
                     c1_sem = st.selectbox("Course I Semester", ["First", "Second"], index=1, key="c1s")
+                    c1_l1 = st.text_input("Course I Link 1 (optional)", key="c1l1")
+                    c1_l2 = st.text_input("Course I Link 2 (optional)", key="c1l2")
                 with col2:
                     c2_name = st.text_input("Curricular Course II Name", key="c2n")
                     c2_code = st.text_input("Course II Code", value="U7YYY", key="c2c")
@@ -449,14 +524,16 @@ def main():
                     c2_dept = st.text_input("Course II Department", value="DIETI", key="c2d")
                     c2_year = st.selectbox("Course II Year", ["First", "Second"], index=1, key="c2y")
                     c2_sem = st.selectbox("Course II Semester", ["First", "Second"], index=1, key="c2s")
+                    c2_l1 = st.text_input("Course II Link 1 (optional)", key="c2l1")
+                    c2_l2 = st.text_input("Course II Link 2 (optional)", key="c2l2")
                 submitted = st.form_submit_button("➕ Add / Update Sub Path")
             if submitted:
                 if main_selected and sub_path and c1_name and c2_name and c1_code and c2_code:
                     if main_selected not in st.session_state.catalog:
                         st.session_state.catalog[main_selected] = {}
                     st.session_state.catalog[main_selected][sub_path] = [
-                        make_course(c1_name, c1_code, c1_cfu, c1_dept, c1_year, c1_sem),
-                        make_course(c2_name, c2_code, c2_cfu, c2_dept, c2_year, c2_sem),
+                        make_course(c1_name, c1_code, c1_cfu, c1_dept, c1_year, c1_sem, links=[l for l in [c1_l1, c1_l2] if l]),
+                        make_course(c2_name, c2_code, c2_cfu, c2_dept, c2_year, c2_sem, links=[l for l in [c2_l1, c2_l2] if l]),
                     ]
                     st.success(f"✅ Saved sub path '{sub_path}' under main path '{main_selected}'.")
                 else:
@@ -470,11 +547,14 @@ def main():
                 f_dept = st.text_input("Department", value="DIETI")
                 f_year = st.selectbox("Year", ["First", "Second"], index=1, key="fy")
                 f_sem = st.selectbox("Semester", ["First", "Second"], index=1, key="fs")
+                f_l1 = st.text_input("Link 1 (optional)")
+                f_l2 = st.text_input("Link 2 (optional)")
                 submitted_free = st.form_submit_button("➕ Add Free Choice Course")
             if submitted_free:
                 if f_name and f_code:
                     if all(fc["name"] != f_name for fc in st.session_state.free_choice_courses):
-                        st.session_state.free_choice_courses.append(make_course(f_name, f_code, f_cfu, f_dept, f_year, f_sem))
+                        links = [l for l in [f_l1, f_l2] if l]
+                        st.session_state.free_choice_courses.append(make_course(f_name, f_code, f_cfu, f_dept, f_year, f_sem, links=links))
                         st.success(f"✅ Course '{f_name}' added!")
                     else:
                         st.warning("A free choice course with this name already exists.")
@@ -554,13 +634,41 @@ def main():
                         f"- **Curricular {idx}: {c['name']}** — `{c['code']}` • **{c['cfu']} CFU** • {c['dept']} • Year: {c['year']} • Semester: {c['semester']}"
                     )
 
-            recs = recommended_by_path.get(main_choice, {}).get(sub_choice, [])
-            if recs:
-                st.info("**Recommended free choice exams for this sub path:** - " + " - ".join(recs))
+            # Notice before free-choice picker (kept from your previous request)
+            st.markdown(
+                "**List of courses with AUTONOMOUS CHOICE for automatic approval if they are not already present in the curriculum/chosen path**"
+            )
 
+            # Determine how many free-choice exams are required
             n_free_required = 3 if plan_is_psi else 2
+
+            # Build curricular sets (exclude duplicates by code or name)
+            curricular_list = [curr_courses[0]] if plan_is_psi else curr_courses
+            curr_codes = {str(c["code"]).strip().upper() for c in curricular_list}
+            curr_names = {c["name"].strip().lower() for c in curricular_list}
+
+            # >>> Change 2: path-specific forbidden free-choice codes <<<
+            banned_by_subpath = {
+                "PDS ITE/TS - CURRICULUM INFORMATION TECHNOLOGIES/TEXT AND SPEECH PROCESSING": {"U5902"},  # Text Mining
+                "PDS ITE/SV - CURRICULUM INFORMATION TECHNOLOGIES/SIGNAL AND VIDEO PROCESSING": {"U1644"},  # Information Theory
+                "PDS ITE/AI - CURRICULUM INFORMATION TECHNOLOGIES/DATA SECURITY": {"U2652"},  # Data Security
+                "PDS ISY - CURRICULUM INTELLIGENT SYSTEMS": {"U7219"},  # Computational Intelligence
+            }
+            banned_codes = set()
+            # Match the selected sub path exactly (as defined in catalog)
+            if sub_choice in banned_by_subpath:
+                banned_codes = banned_by_subpath[sub_choice]
+
+            # Filter available free-choice courses
+            available_free_courses = [
+                fc for fc in st.session_state.free_choice_courses
+                if str(fc["code"]).strip().upper() not in curr_codes
+                and fc["name"].strip().lower() not in curr_names
+                and str(fc["code"]).strip().upper() not in banned_codes
+            ]
+
             st.write(f"### 🎯 Select {n_free_required} Free Choice Courses:")
-            free_labels = [course_label(c) for c in st.session_state.free_choice_courses]
+            free_labels = [course_label(c) for c in available_free_courses]
             free_choice_selection_labels = st.multiselect(
                 f"Choose {n_free_required} Free Courses:",
                 free_labels,
@@ -569,11 +677,10 @@ def main():
                 help=f"Start typing to search; select exactly {n_free_required}.",
             )
             selected_free = [
-                c for c in st.session_state.free_choice_courses if course_label(c) in free_choice_selection_labels
+                c for c in available_free_courses if course_label(c) in free_choice_selection_labels
             ]
 
             fixed_total = sum(x["cfu"] for x in FIXED_COMPONENTS)
-            curricular_list = [curr_courses[0]] if plan_is_psi else curr_courses
             curricular_total = sum(c["cfu"] for c in curricular_list)
             free_total = sum(c["cfu"] for c in selected_free)
             current_total = fixed_total + curricular_total + free_total
