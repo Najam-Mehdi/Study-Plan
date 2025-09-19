@@ -3,3 +3,4 @@ pandas
 docx
 python-docx
 docx2pdf
+reportlab.lib
