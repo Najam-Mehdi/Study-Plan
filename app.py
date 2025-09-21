@@ -419,7 +419,7 @@ def main():
             make_course("Information Theory", "U1644", 6, "DMRC - LM Ing. Matematica", "Second", "I", links=["https://www.docenti.unina.it/#!/professor/414e544f4e4941204d4152494154554c494e4f544c4e4e4e4d3731503532463833394e/schede_insegnamento"]),
             make_course("Methods for Artificial Intelligence", "U3522", 6, "DIETI – LM Informatica", "Second", "II", links=["https://www.docenti.unina.it/#!/professor/53494c564941524f535349525353534c563737453536423936334e/programmi/shedainsegnamento"]),
             make_course("Natural Language Processing", "U3539", 6, "DIETI – LM Informatica", "Second", "II", links=["https://www.docenti.unina.it/#!/professor/4652414e434553434f43555455474e4f435447464e4336304d31364638333948/programmi/shedainsegnamento"]),
-            make_course("Physics Informed Machine Learning", "U****", 6, "DIETI – LM Data Science", "Second", "II", links=[]),
+            make_course("Physics Informed Machine Learning", "NI", 6, "DIETI – LM Data Science", "Second", "II", links=[]),
             make_course("Preference learning", "U6641", 6, "DISES – LM Economia e Commercio", "Second", "I", links=[]),
             make_course("Reliability and Risk in Aerospace Engineering", "U3835", 6, "DII – LM Ing. Aerospaziale", "Second", "II", links=["https://www.docenti.unina.it/#!/professor/4d415353494d494c49414e4f47494f5247494f4752474d534d3636523133463833394d/programmi/shedainsegnamento"]),
             make_course("Robotics Lab", "U2325", 6, "DIETI – LM Ing. Automazione e Robotica", "Second", "I", links=["https://www.docenti.unina.it/#!/professor/4a4f4e415448414e4341434143454343434a544838375431334638333949/programmi/programma"]),
@@ -665,7 +665,7 @@ def main():
             curr_codes = {str(c["code"]).strip().upper() for c in curricular_list}
             curr_names = {c["name"].strip().lower() for c in curricular_list}
 
-            # Path-specific forbidden free-choice codes (catalogue mode only)
+            # Path-specific forbidden free-choice codes
             banned_by_subpath = {
                 "PDS ITE/TS - CURRICULUM INFORMATION TECHNOLOGIES/TEXT AND SPEECH PROCESSING": {"U5902"},  # Text Mining
                 "PDS ITE/SV - CURRICULUM INFORMATION TECHNOLOGIES/SIGNAL AND VIDEO PROCESSING": {"U1644"},  # Information Theory
@@ -709,35 +709,69 @@ def main():
                 # Manual MS course entry
                 st.markdown(f"### ✍️ Enter {n_free_required} Free-Choice MS Courses Manually:")
                 st.info("Custom free-choice exams require approval by the Commissione. The generated PDF will be watermarked 'To Be Approved'.")
+
                 custom_free = []
                 valid_custom = True
-                dup_errors = []
+                errors = []
+
+                # Track duplicates among custom entries too
+                seen_codes = set()
+                seen_names = set()
+
                 for i in range(n_free_required):
-                    st.markdown(f"**Free Choice #{i+1}**")
+                    st.markdown(f"**Free Choice #{i + 1}**")
                     col1, col2, col3 = st.columns(3)
                     with col1:
-                        fc_name = st.text_input(f"Course Name #{i+1}", key=f"cust_name_{i}")
-                        fc_dept = st.text_input(f"Department #{i+1}", key=f"cust_dept_{i}")
+                        fc_name = st.text_input(f"Course Name #{i + 1}", key=f"cust_name_{i}")
+                        fc_dept = st.text_input(f"Department #{i + 1}", key=f"cust_dept_{i}")
                     with col2:
-                        fc_code = st.text_input(f"Code #{i+1}", key=f"cust_code_{i}")
-                        fc_cfu = st.number_input(f"CFU #{i+1}", min_value=1, max_value=30, value=6, step=1, key=f"cust_cfu_{i}")
+                        fc_code = st.text_input(f"Code #{i + 1}", key=f"cust_code_{i}")
+                        fc_cfu = st.number_input(f"CFU #{i + 1}", min_value=1, max_value=30, value=6, step=1, key=f"cust_cfu_{i}")
                     with col3:
-                        fc_year = st.selectbox(f"Year #{i+1}", ["First", "Second"], index=1, key=f"cust_year_{i}")
-                        fc_sem = st.selectbox(f"Semester #{i+1}", ["First", "Second"], index=0, key=f"cust_sem_{i}")
+                        fc_year = st.selectbox(f"Year #{i + 1}", ["First", "Second"], index=1, key=f"cust_year_{i}")
+                        fc_sem = st.selectbox(f"Semester #{i + 1}", ["First", "Second"], index=0, key=f"cust_sem_{i}")
 
+                    # Basic required fields
                     if not (fc_name and fc_code and fc_dept):
                         valid_custom = False
-                    if fc_code and (fc_code.strip().upper() in curr_codes):
-                        valid_custom = False
-                        dup_errors.append(f"- #{i+1}: code '{fc_code}' duplicates a curricular course.")
-                    if fc_name and (fc_name.strip().lower() in curr_names):
-                        valid_custom = False
-                        dup_errors.append(f"- #{i+1}: name '{fc_name}' duplicates a curricular course.")
 
-                    custom_free.append(make_course(fc_name or "", fc_code or "", int(fc_cfu), fc_dept or "", fc_year or "Second", fc_sem or "Second"))
+                    # Normalize for checks
+                    code_up = (fc_code or "").strip().upper()
+                    name_lo = (fc_name or "").strip().lower()
 
-                if dup_errors:
-                    st.error("Custom free-choice must not duplicate curricular courses:\n" + "\n".join(dup_errors))
+                    # 1) No duplicates with curriculars (by code OR name)
+                    if code_up and (code_up in curr_codes):
+                        valid_custom = False
+                        errors.append(f"- #{i + 1}: code '{fc_code}' duplicates a curricular course.")
+                    if name_lo and (name_lo in curr_names):
+                        valid_custom = False
+                        errors.append(f"- #{i + 1}: name '{fc_name}' duplicates a curricular course.")
+
+                    # 2) Path-specific exclusions (same as catalogue)
+                    if code_up and (code_up in banned_codes):
+                        valid_custom = False
+                        errors.append(f"- #{i + 1}: code '{fc_code}' is not allowed for the selected sub path.")
+
+                    # 3) No duplicates among custom entries
+                    if code_up:
+                        if code_up in seen_codes:
+                            valid_custom = False
+                            errors.append(f"- #{i + 1}: code '{fc_code}' is duplicated in your custom list.")
+                        else:
+                            seen_codes.add(code_up)
+                    if name_lo:
+                        if name_lo in seen_names:
+                            valid_custom = False
+                            errors.append(f"- #{i + 1}: name '{fc_name}' is duplicated in your custom list.")
+                        else:
+                            seen_names.add(name_lo)
+
+                    custom_free.append(
+                        make_course(fc_name or "", fc_code or "", int(fc_cfu), fc_dept or "", fc_year or "Second", fc_sem or "Second")
+                    )
+
+                if errors:
+                    st.error("Please fix the following issues before generating the PDF:\n" + "\n".join(errors))
 
             # Totals
             fixed_total = sum(x["cfu"] for x in FIXED_COMPONENTS)
@@ -745,21 +779,41 @@ def main():
             chosen_free = selected_free if not using_custom else custom_free
             free_total = sum(c["cfu"] for c in chosen_free)
             current_total = fixed_total + curricular_total + free_total
+            excess = max(0, current_total - 60)
 
             st.caption(
-                f"Planned CFUs so far: Curricular **{curricular_total}**, Free-choice **{free_total}**, Fixed components **{fixed_total}** → **{current_total}/60 CFU**"
+                f"Planned CFUs so far: Curricular **{curricular_total}**, Free-choice **{free_total}**, "
+                f"Fixed components **{fixed_total}** → **{current_total}/60 CFU**"
             )
 
+            # PSI minimum
             if plan_is_psi and current_total < 60:
                 st.error(f"Your selections total {current_total} CFU. In PSI you must reach at least 60 CFU. Please add/change free-choice exams.")
-            if current_total > 60:
-                st.error(f"Your selections exceed 60 CFU by {current_total - 60} CFU. Please adjust your free-choice exams or consult the coordinator.")
 
-            # Can-generate flags
-            can_generate_catalogue = (not using_custom) and (len(selected_free) == n_free_required) and (not plan_is_psi or current_total >= 60) and (current_total <= 60)
-            can_generate_custom = using_custom and all(cf["name"] and cf["code"] and cf["dept"] for cf in custom_free) \
-                                  and (not plan_is_psi or current_total >= 60) and (current_total <= 60) \
-                                  and all(cf["code"].strip().upper() not in curr_codes and cf["name"].strip().lower() not in curr_names for cf in custom_free)
+            # New overage rules
+            if 0 < excess <= 6:
+                st.warning(f"Your selections exceed 60 CFU by {excess} CFU. Please adjust your free-choice exams or consult the coordinator.")
+            elif excess > 6:
+                st.error(f"Your selections exceed 60 CFU by {excess} CFU. Please adjust your free-choice exams or consult the coordinator.")
+
+            # Can-generate flags (allow up to 66 CFU)
+            requires_approval = plan_is_psi or using_custom or (excess > 0)
+
+            can_generate_catalogue = (
+                (not using_custom)
+                and (len(selected_free) == n_free_required)
+                and (not plan_is_psi or current_total >= 60)
+                and (current_total <= 66)
+            )
+
+            can_generate_custom = (
+                using_custom
+                and all(cf["name"] and cf["code"] and cf["dept"] for cf in custom_free)
+                and all(cf["code"].strip().upper() not in curr_codes and cf["name"].strip().lower() not in curr_names for cf in custom_free)
+                and all(cf["code"].strip().upper() not in banned_codes for cf in custom_free)
+                and (not plan_is_psi or current_total >= 60)
+                and (current_total <= 66)
+            )
 
             # Generate PDF
             if (can_generate_catalogue or can_generate_custom) and st.button("📄 Generate PDF"):
@@ -772,7 +826,6 @@ def main():
                         *free_block,  # 3 items expected
                         *FIXED_COMPONENTS,
                     ]
-                    st.warning("This is a Piano di Studi Individuale and must be approved by the Commissione. The PDF will be watermarked 'To Be Approved'.")
                 else:
                     ordered_courses = [
                         curr_courses[0],
@@ -781,9 +834,7 @@ def main():
                         *FIXED_COMPONENTS,
                     ]
 
-                wm = "To Be Approved" if (plan_is_psi or using_custom) else None
-                if using_custom and not plan_is_psi:
-                    st.warning("Your plan includes custom free-choice MS courses. It must be approved by the Commissione. The PDF will be watermarked 'To Be Approved'.")
+                wm = "To Be Approved" if requires_approval else None
 
                 pdf_buf = build_study_plan_pdf(
                     name=name,
@@ -805,13 +856,18 @@ def main():
                 fname = f"Piano_di_Studi_{matricula or 'studente'}.pdf"
                 st.download_button("⬇ Download PDF", data=pdf_buf.getvalue(), file_name=fname, mime="application/pdf")
             else:
-                # Clear, explicit warnings; no inline expressions that return objects
+                # Clear, explicit warnings
                 if not using_custom:
                     if len(selected_free) != n_free_required:
                         st.warning(f"⚠ Please select exactly {n_free_required} free-choice courses from the catalogue.")
+                    if excess > 6:
+                        st.warning("⚠ Reduce CFUs to 66 or less to enable PDF generation.")
                 else:
                     if not (can_generate_custom):
                         st.warning(f"⚠ Please complete all fields for {n_free_required} custom free-choice MS courses and ensure no duplicates with curricular courses.")
+                    if excess > 6:
+                        st.warning("⚠ Reduce CFUs to 66 or less to enable PDF generation.")
 
 if __name__ == "__main__":
     main()
+
