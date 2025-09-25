@@ -283,11 +283,12 @@ def main():
                             "https://www.docenti.unina.it/#!/professor/414e4e41434f52415a5a4143525a4e4e4136344c35374c37383144/schede_insegnamento",
                         ],
                     ),
+                    # UPDATED: Curricular II is Speech Processing (6 CFU)
                     make_course(
-                        "Natural Language Processing",
-                        "U3539", 6, "DIETI – LM Informatica", "Second", "second",
+                        "Speech Processing",
+                        "U6636", 6, "DIETI – LM Data Science", "Second", "second",
                         links=[
-                            "https://www.docenti.unina.it/#!/professor/4652414e434553434f43555455474e4f435447464e4336304d31364638333948/programmi/shedainsegnamento",
+                            "https://www.docenti.unina.it/#!/professor/4652414e434553434f43555455474e4f435447464e4336304d31364638333948/schede_insegnamento",
                         ],
                     ),
                 ],
@@ -378,9 +379,10 @@ def main():
             },
             "Curriculum INTELLIGENT SYSTEMS - ISY": {
                 "PDS ISY - CURRICULUM INTELLIGENT SYSTEMS": [
+                    # UPDATED: Department is LM Physics only
                     make_course(
                         "Computational Intelligence and Machine Learning for Physics",
-                        "U5460", 12, "DFEP – LM Physics and DIETI – LM Data Science", "Second", "second",
+                        "U5460", 12, "DFEP – LM Physics", "Second", "second",
                         links=[
                             "https://www.docenti.unina.it/#!/professor/46455244494e414e444f4449204d415254494e4f444d5246444e3635433235463833394b/programmi/shedainsegnamento",
                         ],
@@ -870,4 +872,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
