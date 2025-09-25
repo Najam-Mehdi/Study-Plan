@@ -175,7 +175,7 @@ def build_study_plan_pdf(
     for b in bullets:
         story.append(Paragraph(b, body_just))
 
-    story.append(Spacer(1, 30))
+    story.append(Spacer(1, 15))
 
     # Signature row as 2-col table, left/right aligned on a single line
     sig = PDFTable(
@@ -192,6 +192,57 @@ def build_study_plan_pdf(
         ("BOTTOMPADDING", (0,0), (-1,-1), 0),
     ]))
     story.append(sig)
+
+    approval_title = ParagraphStyle(name="ApprovalTitle", parent=styles["Heading3"], alignment=TA_CENTER)
+
+    mp_upper = (main_path or "").upper()
+    sp_upper = (sub_path or "").upper()
+    if "INDIVIDUALE" in sp_upper:
+        curriculum_disp = "Individuale"
+    elif "FUNDAMENTAL SCIENCES" in mp_upper:
+        curriculum_disp = "FUNDAMENTAL SCIENCES"
+    elif "INFORMATION TECHNOLOGIES" in mp_upper:
+        curriculum_disp = "INFORMATION TECHNOLOGIES"
+    elif "PUBLIC ADMINISTRATION, ECONOMY AND MANAGEMENT" in mp_upper or "ECO" in mp_upper:
+        curriculum_disp = "PUBLIC ADMINISTRATION, ECONOMY AND MANAGEMENT"
+    elif "INTELLIGENT SYSTEMS" in mp_upper:
+        curriculum_disp = "INTELLIGENT SYSTEMS"
+    else:
+        curriculum_disp = (main_path or "").replace("Curriculum ", "").strip() or "Individuale"
+
+    story.append(Spacer(1, 18))
+    story.append(Paragraph("Valutazione Piano di Studi", approval_title))
+    story.append(Spacer(1, 10))
+    story.append(Paragraph(
+        "La Commissione di Coordinamento Didattico della LM Data Science presieduta dal coordinatore, Prog. Giuseppe Longo, dopo attenta valutazione, approva il Piano di Studi presentato dallo studente",
+        body_just,
+    ))
+    story.append(Spacer(1, 8))
+    story.append(Paragraph(f"<b>MATRICOLA NOME COMPLETO:</b> {matricula} {name}", styles["BodyText"]))
+    story.append(Spacer(1, 8))
+    story.append(Paragraph(
+        "per l’iscrizione al Secondo Anno della LM – Data Science con il curriculum:",
+        styles["BodyText"],
+    ))
+    story.append(Paragraph(f"<b>{curriculum_disp}</b>", styles["BodyText"]))
+    story.append(Spacer(1, 18))
+
+    sig_comm = PDFTable(
+        [[
+            Paragraph("Napoli, ___/___/2025", styles["BodyText"]),
+            Paragraph("Prof. Giuseppe Longo  —  The Coordinator of Ms Data Science", styles["BodyText"]),
+        ]],
+        colWidths=[avail_w * 0.45, avail_w * 0.55],
+    )
+    sig_comm.setStyle(TableStyle([
+        ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+    ]))
+    story.append(sig_comm)
 
     def _watermark(c, _doc):
         if watermark_text:
