@@ -210,14 +210,14 @@ def build_study_plan_pdf(
     else:
         curriculum_disp = (main_path or "").replace("Curriculum ", "").strip() or "Individuale"
 
-    story.append(Spacer(1, 18))
+    story.append(Spacer(1, 14))
     story.append(Paragraph("Valutazione Piano di Studi", approval_title))
     story.append(Spacer(1, 10))
     story.append(Paragraph(
         "La Commissione di Coordinamento Didattico della LM Data Science presieduta dal coordinatore, Prog. Giuseppe Longo, dopo attenta valutazione, approva il Piano di Studi presentato dallo studente",
         body_just,
     ))
-    story.append(Spacer(1, 8))
+    story.append(Spacer(1, 3))
     story.append(Paragraph(f"<b>MATRICOLA NOME COMPLETO:</b> {matricula} {name}", styles["BodyText"]))
     story.append(Spacer(1, 8))
     story.append(Paragraph(
