@@ -868,6 +868,22 @@ def main():
                 and (current_total <= 66)
             )
 
+            def short_code_from_subpath(label: str) -> str:
+                """
+                Extracts short code (e.g., 'ITE/TS', 'ECO', 'ISY', 'FSE/PH') from your sub-path label,
+                which typically looks like 'PDS ITE/TS - CURRICULUM ...'.
+                """
+                if not label:
+                    return "PLAN"
+                # remove any suffix like " — Piano di Studi Individuale" if ever present
+                base = label.split(" — ", 1)[0]
+                # take the part before " - "
+                head = base.split(" - ", 1)[0].strip()
+                # strip optional "PDS " prefix
+                if head.upper().startswith("PDS "):
+                    head = head[4:].strip()
+                return head  # e.g. "ITE/TS", "ECO", "ISY", "FSE/PH"
+
             # Generate PDF
             if (can_generate_catalogue or can_generate_custom) and st.button("📄 Generate PDF"):
                 dob_str = dob.strftime("%d/%m/%Y") if hasattr(dob, 'strftime') else str(dob)
@@ -906,7 +922,19 @@ def main():
                     bachelors_degree=bachelors_degree,
                     watermark_text=wm,
                 )
-                fname = f"Piano_di_Studi_{matricula or 'studente'}.pdf"
+                # Build short plan code from the selected sub path
+                plan_code = short_code_from_subpath(sub_choice)  # e.g., "ITE/TS", "ECO", "ISY", "FSE/PH"
+
+                # Use short code + optional PSI suffix
+                plan_name = plan_code.replace("/", "-") + ("-PSI" if plan_is_psi else "")
+
+                raw_fname = f"{(matricula or 'studente').strip()}_{plan_name}".strip("_")
+
+                # sanitize to avoid illegal filename chars (keep dot, underscore, dash)
+                safe_fname = "".join(ch if ch.isalnum() or ch in "._-" else "_" for ch in raw_fname)
+
+                fname = f"{safe_fname}.pdf"
+
                 st.download_button("⬇ Download PDF", data=pdf_buf.getvalue(), file_name=fname, mime="application/pdf")
             else:
                 # Clear, explicit warnings
