@@ -85,7 +85,170 @@ def build_study_plan_pdf(
         watermark_text: str = None,
 ) -> BytesIO:
     buf = BytesIO()
+    doc = SimpleDocTemplate(
+        buf, pagesize=A4, leftMargin=36, rightMargin=36, topMargin=42, bottomMargin=42
+    )
+    styles = getSampleStyleSheet()
+    title = ParagraphStyle(name="TitleCenter", parent=styles["Heading2"], alignment=TA_CENTER)
+    center = ParagraphStyle(name="Center", parent=styles["BodyText"], alignment=TA_CENTER)
+    body_just = ParagraphStyle(name="BodyJust", parent=styles["BodyText"], alignment=TA_JUSTIFY)
 
+    def p(text, style=center):
+        return Paragraph(text, style)
+
+    aa = academic_year_to_aa_format(academic_year)
+
+    story = []
+    # Header
+    story.append(p("<b>Università degli Studi di Napoli Federico II</b>", title))
+    story.append(Spacer(1, 6))
+    story.append(p("Corso di Studio", center))
+    story.append(p(f"<b>Laurea Magistrale in {degree_name}</b>", center))
+    story.append(p("<b>Piano di Studi</b>", center))
+    story.append(p(f"A.A {aa}", center))
+    story.append(Spacer(1, 6))
+    story.append(p(f"Indirizzo: {sub_path}", center))
+    story.append(p("<i>Da consegnare al Coordinatore del Corso, Prof. Giuseppe Longo</i>", center))
+    story.append(Spacer(1, 10))
+
+    # Body
+    story.append(Paragraph(
+        "Il/La sottoscritto/a <b>%s</b>, matr. <b>%s</b>, nato/a a <b>%s</b> il <b>%s</b>, cell. <b>%s</b>, e-mail <b>%s</b>" %
+        (name, matricula, pob, dob_str, phone, email),
+        body_just,
+    ))
+    story.append(Paragraph(
+        "iscritto/a nell’A.A. <b>%s</b> al <b>%s</b> anno del Corso di <b>%s</b> in <b>%s</b>, chiede alla Commissione di Coordinamento Didattico del Corso di Studio l’approvazione del presente Piano di Studio (PdS)." %
+        (aa, year_of_degree, degree_type, degree_name),
+        body_just,
+    ))
+    story.append(Spacer(1, 6))
+    story.append(Paragraph(
+        "Studente/Studentessa della Laurea Triennale: <b>%s</b>" % (bachelors_degree,),
+        body_just,
+    ))
+    story.append(Spacer(1, 8))
+
+    # Table 6x8
+    page_w, _ = A4
+    avail_w = page_w - doc.leftMargin - doc.rightMargin
+    col_widths = [avail_w * 0.32, avail_w * 0.27, avail_w * 0.15, avail_w * 0.07, avail_w * 0.09, avail_w * 0.10]
+    header_style = ParagraphStyle(name="TblHeader", parent=styles["BodyText"], alignment=TA_CENTER, fontSize=9, leading=11)
+    cell = ParagraphStyle(name="TblCell", parent=styles["BodyText"], fontSize=9, leading=11)
+    cell_center = ParagraphStyle(name="TblCellCenter", parent=cell, alignment=TA_CENTER)
+
+    data = [[
+        Paragraph("Insegnamento", header_style),
+        Paragraph("Corso Di Laurea Da Cui È Offerto", header_style),
+        Paragraph("Codice Insegnamento", header_style),
+        Paragraph("CFU", header_style),
+        Paragraph("Anno", header_style),
+        Paragraph("Semestre", header_style),
+    ]]
+    for c in courses[:7]:
+        data.append([
+            Paragraph(c["name"], cell),
+            Paragraph(c["dept"], cell),
+            Paragraph(str(c["code"]), cell_center),
+            Paragraph(str(c["cfu"]), cell_center),
+            Paragraph(str(c["year"]), cell_center),
+            Paragraph(str(c["semester"]), cell_center),
+        ])
+
+    tbl = PDFTable(data, colWidths=col_widths, repeatRows=1)
+    tbl.setStyle(TableStyle([
+        ("GRID", (0,0), (-1,-1), 0.5, colors.black),
+        ("BACKGROUND", (0,0), (-1,0), colors.whitesmoke),
+        ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
+        ("BOTTOMPADDING", (0,0), (-1,-1), 4),
+        ("TOPPADDING", (0,0), (-1,-1), 4),
+    ]))
+    story.append(tbl)
+    story.append(Spacer(1, 20))
+
+    story.append(Paragraph("<b>Modalità di compilazione:</b>", styles["BodyText"]))
+    bullets = [
+        "Si possono includere nel PdS ... coerente con il Corso di Studio",
+        "É ammesso il superamento del numero dei CFU previsti",
+    ]
+    for b in bullets:
+        story.append(Paragraph(b, body_just))
+    story.append(Spacer(1, 15))
+
+    # Signature row
+    sig = PDFTable([[f"Napoli ({date.today().strftime('%d/%m/%Y')})", "firma dello studente"]],
+                   colWidths=[avail_w * 0.5, avail_w * 0.5])
+    sig.setStyle(TableStyle([
+        ("ALIGN", (0,0), (0,0), "LEFT"),
+        ("ALIGN", (1,0), (1,0), "RIGHT"),
+        ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
+        ("LEFTPADDING", (0,0), (-1,-1), 0),
+        ("RIGHTPADDING", (0,0), (-1,-1), 0),
+        ("TOPPADDING", (0,0), (-1,-1), 4),
+        ("BOTTOMPADDING", (0,0), (-1,-1), 0),
+    ]))
+    story.append(sig)
+
+    approval_title = ParagraphStyle(name="ApprovalTitle", parent=styles["Heading3"], alignment=TA_CENTER)
+
+    mp_upper = (main_path or "").upper()
+    sp_upper = (sub_path or "").upper()
+    if "INDIVIDUALE" in sp_upper:
+        curriculum_disp = "Individuale"
+    elif "FUNDAMENTAL SCIENCES" in mp_upper:
+        curriculum_disp = "FUNDAMENTAL SCIENCES"
+    elif "INFORMATION TECHNOLOGIES" in mp_upper:
+        curriculum_disp = "INFORMATION TECHNOLOGIES"
+    elif "PUBLIC ADMINISTRATION, ECONOMY AND MANAGEMENT" in mp_upper or "ECO" in mp_upper:
+        curriculum_disp = "PUBLIC ADMINISTRATION, ECONOMY AND MANAGEMENT"
+    elif "INTELLIGENT SYSTEMS" in mp_upper:
+        curriculum_disp = "INTELLIGENT SYSTEMS"
+    else:
+        curriculum_disp = (main_path or "").replace("Curriculum ", "").strip() or "Individuale"
+
+    story.append(Spacer(1, 14))
+    story.append(Paragraph("Valutazione Piano di Studi", approval_title))
+    story.append(Spacer(1, 10))
+    story.append(Paragraph(
+        "La Commissione di Coordinamento Didattico ... approva il Piano di Studi presentato dallo studente",
+        body_just,
+    ))
+    story.append(Spacer(1, 3))
+    story.append(Paragraph(f"<b>MATRICOLA NOME COMPLETO:</b> {matricula} {name}", styles["BodyText"]))
+    story.append(Spacer(1, 8))
+    story.append(Paragraph("per l’iscrizione al Secondo Anno della LM – Data Science con il curriculum:", styles["BodyText"]))
+    story.append(Paragraph(f"<b>{curriculum_disp}</b>", styles["BodyText"]))
+    story.append(Spacer(1, 18))
+
+    sig_comm = PDFTable([
+        [Paragraph("Napoli, ___/___/2025", styles["BodyText"]),
+         Paragraph("Prof. Giuseppe Longo  —  The Coordinator of Ms Data Science", styles["BodyText"])]
+    ], colWidths=[avail_w * 0.45, avail_w * 0.55])
+    sig_comm.setStyle(TableStyle([
+        ("ALIGN", (0,0), (-1,-1), "LEFT"),
+        ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
+        ("LEFTPADDING", (0,0), (-1,-1), 0),
+        ("RIGHTPADDING", (0,0), (-1,-1), 0),
+        ("TOPPADDING", (0,0), (-1,-1), 4),
+        ("BOTTOMPADDING", (0,0), (-1,-1), 0),
+    ]))
+    story.append(sig_comm)
+
+    # Lint-proof capture of watermark_text
+    def _watermark(c, _doc, wm_text=watermark_text):
+        if wm_text:
+            w, h = A4
+            c.saveState()
+            c.setFont("Helvetica-Bold", 48)
+            c.setFillColorRGB(0.8, 0.8, 0.8)
+            c.translate(w/2, h/2)
+            c.rotate(45)
+            c.drawCentredString(0, 0, wm_text)
+            c.restoreState()
+
+    doc.build(story, onFirstPage=_watermark, onLaterPages=_watermark)
+    buf.seek(0)
+    return buf
 
 # --- Apps Script sender (uses your Streamlit secrets) ---
 def send_to_google(pdf_bytes: bytes, filename: str, student: dict, meta: dict) -> dict:
@@ -107,6 +270,7 @@ def send_to_google(pdf_bytes: bytes, filename: str, student: dict, meta: dict) -
         return r.json()
     except Exception as e:
         return {"ok": False, "error": str(e)}
+
 
     doc = SimpleDocTemplate(
         buf, pagesize=A4, leftMargin=36, rightMargin=36, topMargin=42, bottomMargin=42
