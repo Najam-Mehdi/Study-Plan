@@ -46,6 +46,17 @@ def make_course(
 def course_label(c):
     return f"{c['name']} ({c['code']}, {c['cfu']} CFU)"
 
+# --- helper to serialize courses for logging ---
+def serialize_course(c: dict) -> dict:
+    return {
+        "name": c.get("name", ""),
+        "code": str(c.get("code", "")),
+        "cfu": int(c.get("cfu", 0) or 0),
+        "dept": c.get("dept", ""),
+        "year": c.get("year", ""),
+        "semester": c.get("semester", ""),
+    }
+
 
 # Fixed second-year components
 FIXED_COMPONENTS = [
@@ -957,18 +968,24 @@ def main():
             degree_name = st.text_input("Degree Name", value="DATA SCIENCE")
 
         # Bachelor's dropdown
-        bachelors_degree = st.selectbox(
+        bkg_choice = st.selectbox(
             "Bachelor's (Laurea Triennale) background",
             [
-                "Computer Science or Software Engineering",
-                "Mathematics or Physics",
-                "Economics and Social Sciences or Statistics",
-                "Management or Environmental Engineering",
-                "others",
+                "Computer Science",
+                "Software Engineering",
+                "Economics and Finance",
+                "Statistics and Data Analytics",
+                "Mathematics",
+                "Physics",
+                "Other (Specify)",
             ],
             index=0,
             help="Select your previous bachelor's area.",
         )
+        bkg_other = ""
+        if bkg_choice == "Other (Specify)":
+            bkg_other = st.text_input("Please specify your bachelor's background")
+        bachelors_degree = bkg_other.strip() or bkg_choice
 
         st.markdown("---")
 
@@ -1106,6 +1123,10 @@ def main():
                     # Normalize for checks
                     code_up = (fc_code or "").strip().upper()
                     name_lo = (fc_name or "").strip().lower()
+                    # 0) Ban "italian" in course name (case-insensitive)
+                    if name_lo and ("italian" in name_lo):
+                        valid_custom = False
+                        errors.append(f"- #{i + 1}: Free Choice cannot contain 'Italian'.")
 
                     # 1) No duplicates with curriculars (by code OR name)
                     if code_up and (code_up in curr_codes):
@@ -1180,10 +1201,13 @@ def main():
 
             can_generate_custom = (
                     using_custom
+                    and valid_custom
                     and all(cf["name"] and cf["code"] and cf["dept"] for cf in custom_free)
                     and all(
-                cf["code"].strip().upper() not in curr_codes and cf["name"].strip().lower() not in curr_names for cf in
-                custom_free)
+                cf["code"].strip().upper() not in curr_codes
+                and cf["name"].strip().lower() not in curr_names
+                for cf in custom_free
+            )
                     and all(cf["code"].strip().upper() not in banned_codes for cf in custom_free)
                     and (not plan_is_psi or current_total >= 60)
                     and (current_total <= 66)
@@ -1260,32 +1284,42 @@ def main():
                 # Get the bytes once (use for both upload + download)
                 pdf_bytes = pdf_buf.getvalue()
 
-                # Send to Google (Apps Script)
+                # Build full payload (all inputs + all selected courses)
+                curricular_for_log = [curr_courses[0]] if plan_is_psi else curr_courses[:2]
+                free_for_log = free_block
+                fixed_for_log = FIXED_COMPONENTS
+
+                student_payload = {
+                    "name": name,
+                    "matricula": matricula,
+                    "email": email,
+                    "phone": phone,
+                    "place_of_birth": pob,
+                    "dob": dob_str,
+                    "bachelors_background": bachelors_degree,  # set by Change #3 below
+                }
+
+                meta_payload = {
+                    "academic_year": academic_year,
+                    "year_of_degree": year_of_degree,
+                    "degree_type": degree_type,
+                    "degree_name": degree_name,
+                    "plan_mode": "PSI" if plan_is_psi else "Standard",
+                    "main_path": main_choice,
+                    "sub_path": sub_choice,
+                    "using_custom_free": using_custom,
+                    "requires_approval": requires_approval,
+                    "total_cfu": current_total,
+                    "curricular_courses": [serialize_course(c) for c in curricular_for_log],
+                    "free_courses": [serialize_course(c) for c in free_for_log],
+                    "fixed_components": [serialize_course(c) for c in fixed_for_log],
+                }
+
+                # Send to Google (Apps Script) — SILENT (no UI messages)
                 try:
-                    with st.spinner("Saving to Google Drive and logging to Sheet..."):
-                        resp = send_to_google(
-                            pdf_bytes,
-                            fname,
-                            student={
-                                "name": name,
-                                "matricula": matricula,
-                                "email": email,
-                            },
-                            meta={
-                                "plan_mode": "PSI" if plan_is_psi else "Standard",
-                                "main_path": main_choice,
-                                "sub_path": sub_choice,
-                                "total_cfu": current_total,
-                            },
-                        )
-                    if resp.get("ok"):
-                        st.success("✅ Saved to Google Drive and logged to Google Sheet.")
-                        if resp.get("fileUrl"):
-                            st.caption(f"Drive link: {resp['fileUrl']}")
-                    else:
-                        st.warning(f"Google save failed: {resp.get('error', 'unknown error')}")
-                except Exception as e:
-                    st.warning(f"Could not reach Google endpoint: {e}")
+                    _ = send_to_google(pdf_bytes, fname, student=student_payload, meta=meta_payload)
+                except Exception:
+                    pass
 
                 # Offer download regardless
                 st.download_button("⬇ Download PDF", data=pdf_bytes, file_name=fname, mime="application/pdf")
