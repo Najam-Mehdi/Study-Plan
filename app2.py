@@ -264,12 +264,24 @@ def send_to_google(pdf_bytes: bytes, filename: str, student: dict, meta: dict) -
         "student": student,
         "meta": meta,
     }
+
     try:
         r = requests.post(url, json=payload, timeout=30)
-        r.raise_for_status()
-        return r.json()
     except Exception as e:
-        return {"ok": False, "error": str(e)}
+        return {"ok": False, "error": f"request_failed: {e}"}
+
+    ct = (r.headers.get("content-type") or "").lower()
+    text = r.text or ""
+    # Try to parse JSON only if server says it is JSON
+    if "application/json" in ct:
+        try:
+            return r.json()
+        except Exception as e:
+            return {"ok": False, "error": f"bad_json ({r.status_code}): {str(e)} | body[:200]={text[:200]!r}"}
+    else:
+        # Most common case: HTML login/permission page or empty body
+        return {"ok": False, "error": f"non_json_response ({r.status_code}): {text[:200]!r}"}
+
 
 
     doc = SimpleDocTemplate(
