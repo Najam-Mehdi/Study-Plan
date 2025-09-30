@@ -490,35 +490,34 @@ def main():
           .sidebar .sidebar-content {background-color: #f0f2f6;}
           .card {padding: 1rem; border-radius: 12px; background: #ffffff; box-shadow: 0 2px 10px rgba(0,0,0,0.06);}
 
-          /* Base buttons */
+          /* Base buttons: keep transitions so :active can animate */
           .stButton > button,
           .stDownloadButton > button {
             border-radius: 8px;
-            cursor: pointer;
-            /* keep transitions so click/active can animate */
-            transition: transform .06s ease, box-shadow .12s ease;
+            color: #fff;
+            transition: transform .08s ease, box-shadow .12s ease;
           }
-          .stButton > button { background-color: #4CAF50; color: white; }
-          .stDownloadButton > button { background-color: #008CBA; color: white; }
+          .stButton > button { background-color: #4CAF50; }
+          .stDownloadButton > button { background-color: #008CBA; }
 
-          /* Disable hover animation (no lift/glow/color change) */
+          /* Kill hover-only effects (leave transform untouched!) */
           .stButton > button:hover,
-          .stButton > button:focus {
-            background-color: #4CAF50 !important;
-            transform: none !important;
-            box-shadow: none !important;
+          .stButton > button:focus:not(:active) {
+            background-color: #4CAF50 !important; /* lock color on hover */
+            box-shadow: none;                      /* no glow on hover */
+            /* no transform here */
           }
           .stDownloadButton > button:hover,
-          .stDownloadButton > button:focus {
+          .stDownloadButton > button:focus:not(:active) {
             background-color: #008CBA !important;
-            transform: none !important;
-            box-shadow: none !important;
+            box-shadow: none;
+            /* no transform here */
           }
 
-          /* Keep a tiny press animation on click */
+          /* Keep a tiny press animation on click (overrides hover) */
           .stButton > button:active,
           .stDownloadButton > button:active {
-            transform: scale(0.98);  /* subtle press */
+            transform: scale(0.98) translateZ(0) !important;
             box-shadow: none;
           }
         </style>
