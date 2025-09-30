@@ -179,7 +179,7 @@ def build_study_plan_pdf(
 
     story.append(Paragraph("<b>Modalità di compilazione:</b>", styles["BodyText"]))
     bullets = [
-        "Si possono includere nel PdS ... coerente con il Corso di Studio",
+        "Si possono includere nel PdS sia insegnamenti consigliati dal Corso di Studio (elencati e di immediata approvazione) sia insegnamenti offerti presso l’Ateneo (riportare nome insegnamento, codice esame, Corso di Studio) purchè costituiscano un percorso didattico complementare, coerente con il Corso di Studio",
         "É ammesso il superamento del numero dei CFU previsti",
     ]
     for b in bullets:
