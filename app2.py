@@ -488,9 +488,40 @@ def main():
         <style>
             .title {text-align: center; color: #4CAF50;}
             .sidebar .sidebar-content {background-color: #f0f2f6;}
-            .stButton>button {background-color: #4CAF50; color: white; border-radius: 8px;}
-            .stDownloadButton>button {background-color: #008CBA; color: white; border-radius: 8px;}
-            .card {padding: 1rem; border-radius: 12px; background: #ffffff; box-shadow: 0 2px 10px rgba(0,0,0,0.06);}            
+            .card {padding: 1rem; border-radius: 12px; background: #ffffff; box-shadow: 0 2px 10px rgba(0,0,0,0.06);}
+
+            /* Buttons: keep color, kill hover/transition/animation */
+            .stButton > button,
+            .stDownloadButton > button {
+                border-radius: 8px;
+                transition: none !important;
+                transform: none !important;
+                animation: none !important;
+                box-shadow: none !important;
+                filter: none !important;
+            }
+            .stButton > button { background-color: #4CAF50; color: white; }
+            .stDownloadButton > button { background-color: #008CBA; color: white; }
+
+            /* Freeze hover/focus/active states */
+            .stButton > button:hover,
+            .stButton > button:focus,
+            .stButton > button:active {
+                background-color: #4CAF50 !important;
+                transform: none !important;
+                box-shadow: none !important;
+                filter: none !important;
+                outline: none !important; /* remove focus ring; delete this line if you want keyboard focus ring */
+            }
+            .stDownloadButton > button:hover,
+            .stDownloadButton > button:focus,
+            .stDownloadButton > button:active {
+                background-color: #008CBA !important;
+                transform: none !important;
+                box-shadow: none !important;
+                filter: none !important;
+                outline: none !important; /* remove focus ring; delete this line if you want keyboard focus ring */
+            }
         </style>
         """,
         unsafe_allow_html=True,
@@ -552,7 +583,12 @@ def main():
         st.subheader("🔑 Teacher Login")
         teacher_id = st.text_input("Enter ID:", type="password")
         teacher_pass = st.text_input("Enter Password:", type="password")
-        if teacher_id == "Professor@unina.it" and teacher_pass == "ISPD03":
+
+        cfg_id = st.secrets.get("TEACHER_ID")
+        cfg_pass = st.secrets.get("TEACHER_PASS")
+
+        teacher_logged_in = False
+        if teacher_id and teacher_pass and teacher_id == cfg_id and teacher_pass == cfg_pass:
             teacher_logged_in = True
             st.success("✅ Logged in successfully!")
 
