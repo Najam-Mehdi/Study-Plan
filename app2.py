@@ -486,42 +486,41 @@ def main():
     st.markdown(
         """
         <style>
-            .title {text-align: center; color: #4CAF50;}
-            .sidebar .sidebar-content {background-color: #f0f2f6;}
-            .card {padding: 1rem; border-radius: 12px; background: #ffffff; box-shadow: 0 2px 10px rgba(0,0,0,0.06);}
+          .title {text-align: center; color: #4CAF50;}
+          .sidebar .sidebar-content {background-color: #f0f2f6;}
+          .card {padding: 1rem; border-radius: 12px; background: #ffffff; box-shadow: 0 2px 10px rgba(0,0,0,0.06);}
 
-            /* Buttons: keep color, kill hover/transition/animation */
-            .stButton > button,
-            .stDownloadButton > button {
-                border-radius: 8px;
-                transition: none !important;
-                transform: none !important;
-                animation: none !important;
-                box-shadow: none !important;
-                filter: none !important;
-            }
-            .stButton > button { background-color: #4CAF50; color: white; }
-            .stDownloadButton > button { background-color: #008CBA; color: white; }
+          /* Base buttons */
+          .stButton > button,
+          .stDownloadButton > button {
+            border-radius: 8px;
+            cursor: pointer;
+            /* keep transitions so click/active can animate */
+            transition: transform .06s ease, box-shadow .12s ease;
+          }
+          .stButton > button { background-color: #4CAF50; color: white; }
+          .stDownloadButton > button { background-color: #008CBA; color: white; }
 
-            /* Freeze hover/focus/active states */
-            .stButton > button:hover,
-            .stButton > button:focus,
-            .stButton > button:active {
-                background-color: #4CAF50 !important;
-                transform: none !important;
-                box-shadow: none !important;
-                filter: none !important;
-                outline: none !important; /* remove focus ring; delete this line if you want keyboard focus ring */
-            }
-            .stDownloadButton > button:hover,
-            .stDownloadButton > button:focus,
-            .stDownloadButton > button:active {
-                background-color: #008CBA !important;
-                transform: none !important;
-                box-shadow: none !important;
-                filter: none !important;
-                outline: none !important; /* remove focus ring; delete this line if you want keyboard focus ring */
-            }
+          /* Disable hover animation (no lift/glow/color change) */
+          .stButton > button:hover,
+          .stButton > button:focus {
+            background-color: #4CAF50 !important;
+            transform: none !important;
+            box-shadow: none !important;
+          }
+          .stDownloadButton > button:hover,
+          .stDownloadButton > button:focus {
+            background-color: #008CBA !important;
+            transform: none !important;
+            box-shadow: none !important;
+          }
+
+          /* Keep a tiny press animation on click */
+          .stButton > button:active,
+          .stDownloadButton > button:active {
+            transform: scale(0.98);  /* subtle press */
+            box-shadow: none;
+          }
         </style>
         """,
         unsafe_allow_html=True,
