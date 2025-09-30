@@ -555,7 +555,6 @@ def main():
           <div style="font-weight:600; margin-bottom:0.35rem;">Privacy notice</div>
           <div style="font-size:0.95rem;">
             <b>Data are stored by the Coordinator of MS</b> (Data Controller).
-            This generator <b>does not store</b> the data you type; it uses them only to build the PDF during the current session.
             The PDF you download/submit may be retained by the University/Coordinator for academic administration.
           </div>
         </div>
@@ -567,11 +566,6 @@ def main():
             """
             - **Controller:** Università degli Studi di Napoli Federico II – Coordinator of LM Data Science  
             - **Purpose:** creation/approval of study plans  
-            - **App storage:** none (no database/files; no profiling); data used only in-session to render the PDF  
-            - **Legal basis:** public-interest/official authority (GDPR Art. 6(1)(e); Italian Privacy Code Art. 2-ter)  
-            - **Retention:** by the University/Coordinator per academic regulations; the generator itself doesn’t retain inputs  
-            - **Security:** HTTPS; minimal data; no persistence  
-            - **Rights:** access/rectification/erasure etc. (GDPR Arts. 12–22). Contact the University DPO for requests
             """
         )
 
