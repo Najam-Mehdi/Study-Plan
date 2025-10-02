@@ -56,6 +56,13 @@ def serialize_course(c: dict) -> dict:
         "year": c.get("year", ""),
         "semester": c.get("semester", ""),
     }
+def meets_free_requirement(free_courses: list[dict], plan_is_psi: bool) -> bool:
+    """Standard: allow 1×12 CFU or 2 courses totaling ≥12 CFU. PSI: exactly 3."""
+    if plan_is_psi:
+        return len(free_courses) == 3
+    total = sum(int(c.get("cfu", 0) or 0) for c in free_courses)
+    n = len(free_courses)
+    return (n == 1 and total >= 12) or (n == 2 and total >= 12)
 
 
 # Fixed second-year components
@@ -1096,6 +1103,9 @@ def main():
             custom_free = []
             using_custom = free_choice_mode == "Add MS course manually"
 
+            # how many can be picked from catalogue in the UI
+            max_catalogue = 3 if plan_is_psi else 2
+
             if not using_custom:
                 # Filter available free-choice courses
                 available_free_courses = [
@@ -1104,23 +1114,42 @@ def main():
                        and fc["name"].strip().lower() not in curr_names
                        and str(fc["code"]).strip().upper() not in banned_codes
                 ]
-                st.markdown(f"### 🎯 Select {n_free_required} Free Choice Courses (Catalogue):")
+
+                st.markdown("### 🎯 Select Free Choice Courses (Catalogue):")
+                help_txt = (
+                    "Select **one 12 CFU course** or **two courses totaling at least 12 CFU**."
+                    if not plan_is_psi else
+                    "Select **exactly 3** courses."
+                )
                 free_labels = [course_label(c) for c in available_free_courses]
                 free_choice_selection_labels = st.multiselect(
-                    f"Choose {n_free_required} Free Courses:",
+                    "Choose your free-choice courses:",
                     free_labels,
-                    max_selections=n_free_required,
+                    max_selections=max_catalogue,
                     placeholder="Type to search free-choice courses…",
-                    help=f"Start typing to search; select exactly {n_free_required}.",
+                    help=help_txt,
                 )
-                selected_free = [
-                    c for c in available_free_courses if course_label(c) in free_choice_selection_labels
-                ]
+                selected_free = [c for c in available_free_courses if course_label(c) in free_choice_selection_labels]
+
             else:
                 # Manual MS course entry
-                st.markdown(f"### ✍️ Enter {n_free_required} Free-Choice MS Courses Manually:")
+                st.markdown("### ✍️ Enter Free-Choice MS Courses Manually:")
+                if plan_is_psi:
+                    num_manual = 3
+                    st.caption("PSI requires **exactly 3** free-choice exams.")
+                else:
+                    num_manual = st.radio(
+                        "How many free-choice courses do you want?",
+                        [1, 2],
+                        horizontal=True,
+                        index=1,
+                        help="Pick **1 course (12 CFU)** or **2 courses (2×6 CFU)**.",
+                    )
+
                 st.info(
-                    "Custom free-choice exams require approval by the Commissione. The generated PDF will be watermarked 'To Be Approved'.")
+                    "Custom free-choice exams require approval by the Commissione. "
+                    "The generated PDF will be watermarked 'To Be Approved'."
+                )
 
                 custom_free = []
                 valid_custom = True
@@ -1130,7 +1159,7 @@ def main():
                 seen_codes = set()
                 seen_names = set()
 
-                for i in range(n_free_required):
+                for i in range(num_manual):
                     st.markdown(f"**Free Choice #{i + 1}**")
                     col1, col2, col3 = st.columns(3)
                     with col1:
@@ -1138,8 +1167,11 @@ def main():
                         fc_dept = st.text_input(f"Department #{i + 1}", key=f"cust_dept_{i}")
                     with col2:
                         fc_code = st.text_input(f"Code #{i + 1}", key=f"cust_code_{i}")
-                        fc_cfu = st.number_input(f"CFU #{i + 1}", min_value=1, max_value=30, value=6, step=1,
-                                                 key=f"cust_cfu_{i}")
+                        # default 12 when only one course is chosen for Standard
+                        default_cfu = 12 if (not plan_is_psi and num_manual == 1) else 6
+                        fc_cfu = st.number_input(
+                            f"CFU #{i + 1}", min_value=1, max_value=30, value=default_cfu, step=1, key=f"cust_cfu_{i}"
+                        )
                     with col3:
                         fc_year = st.selectbox(f"Year #{i + 1}", ["First", "Second"], index=1, key=f"cust_year_{i}")
                         fc_sem = st.selectbox(f"Semester #{i + 1}", ["First", "Second"], index=0, key=f"cust_sem_{i}")
@@ -1151,12 +1183,8 @@ def main():
                     # Normalize for checks
                     code_up = (fc_code or "").strip().upper()
                     name_lo = (fc_name or "").strip().lower()
-                    # 0) Ban "italian" in course name (case-insensitive)
-                    if name_lo and ("italian" in name_lo):
-                        valid_custom = False
-                        errors.append(f"- #{i + 1}: Free Choice cannot contain 'Italian'.")
 
-                    # 1) No duplicates with curriculars (by code OR name)
+                    # No duplicates with curriculars (by code OR name)
                     if code_up and (code_up in curr_codes):
                         valid_custom = False
                         errors.append(f"- #{i + 1}: code '{fc_code}' duplicates a curricular course.")
@@ -1164,12 +1192,12 @@ def main():
                         valid_custom = False
                         errors.append(f"- #{i + 1}: name '{fc_name}' duplicates a curricular course.")
 
-                    # 2) Path-specific exclusions (same as catalogue)
+                    # Path-specific exclusions (same as catalogue)
                     if code_up and (code_up in banned_codes):
                         valid_custom = False
                         errors.append(f"- #{i + 1}: code '{fc_code}' is not allowed for the selected sub path.")
 
-                    # 3) No duplicates among custom entries
+                    # No duplicates among custom entries
                     if code_up:
                         if code_up in seen_codes:
                             valid_custom = False
@@ -1222,7 +1250,7 @@ def main():
 
             can_generate_catalogue = (
                     (not using_custom)
-                    and (len(selected_free) == n_free_required)
+                    and meets_free_requirement(selected_free, plan_is_psi)
                     and (not plan_is_psi or current_total >= 60)
                     and (current_total <= 66)
             )
@@ -1237,6 +1265,7 @@ def main():
                 for cf in custom_free
             )
                     and all(cf["code"].strip().upper() not in banned_codes for cf in custom_free)
+                    and meets_free_requirement(custom_free, plan_is_psi)
                     and (not plan_is_psi or current_total >= 60)
                     and (current_total <= 66)
             )
@@ -1358,17 +1387,25 @@ def main():
             else:
                 # Clear, explicit warnings
                 if not using_custom:
-                    if len(selected_free) != n_free_required:
-                        st.warning(f"⚠ Please select exactly {n_free_required} free-choice courses from the catalogue.")
+                    if not meets_free_requirement(selected_free, plan_is_psi):
+                        if plan_is_psi:
+                            st.warning("⚠ Please select exactly 3 free-choice courses.")
+                        else:
+                            st.warning(
+                                "⚠ Select either **one 12 CFU** free-choice course or **two courses totaling at least 12 CFU**.")
                     if excess > 6:
                         st.warning("⚠ Reduce CFUs to 66 or less to enable PDF generation.")
                 else:
-                    if not (can_generate_custom):
-                        st.warning(
-                            f"⚠ Please complete all fields for {n_free_required} custom free-choice MS courses and ensure no duplicates with curricular courses.")
+                    if not can_generate_custom:
+                        if plan_is_psi:
+                            st.warning(
+                                "⚠ Please complete all fields for 3 custom free-choice MS courses and ensure no duplicates.")
+                        else:
+                            st.warning(
+                                "⚠ For Standard plan, enter either 1 course (12 CFU) or 2 courses totaling at least 12 CFU; fix any duplicates/missing fields.")
                     if excess > 6:
                         st.warning("⚠ Reduce CFUs to 66 or less to enable PDF generation.")
 
 
 if __name__ == "__main__":
-    main()
+    main() 
