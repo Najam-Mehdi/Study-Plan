@@ -743,7 +743,7 @@ def main():
                     ),
                     make_course(
                         "Generative Artificial Intelligence",
-                        "U****", 6, "DIETI – LM Data Science", "Second", "first",
+                        "U7215", 6, "DIETI – LM Data Science", "Second", "first",
                         links=[],
                     ),
                 ],
