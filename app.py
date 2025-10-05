@@ -1287,7 +1287,7 @@ def main():
                 return head  # e.g. "ITE/TS", "ECO", "ISY", "FSE/PH"
 
             # Generate PDF
-            if (can_generate_catalogue or can_generate_custom) and st.button("📄 Generate PDF"):
+            if (can_generate_catalogue or can_generate_custom) and st.button("📄Generate & 📬Send PDF"):
                 dob_str = dob.strftime("%d/%m/%Y") if hasattr(dob, 'strftime') else str(dob)
                 free_block = selected_free if not using_custom else custom_free
 
