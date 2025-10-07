@@ -1307,7 +1307,7 @@ def main():
                 disabled=st.session_state.submitting_pdf or not can_generate,
                 key="gen_pdf_btn",
             )
-            status_placeholder = st.empty()  # where we'll show "Generating...", "Submitted", or errors
+            #status_placeholder = st.empty()  # where we'll show "Generating...", "Submitted", or errors
 
             if gen_clicked:
                 st.session_state.submitting_pdf = True
@@ -1375,17 +1375,28 @@ def main():
                         }
 
                         # ---- submit to Google with clear status ----
+                        # ---- submit to Google (silent; no UI message here) ----
+                        resp = {}
                         try:
                             resp = send_to_google(pdf_bytes, fname, student=student_payload, meta=meta_payload)
-                            if resp.get("ok"):
-                                status_placeholder.success("✅ Submitted. A copy is available to download below.")
-                                if resp.get("fileUrl"):
-                                    st.caption(f"Drive link: {resp['fileUrl']}")
-                            #else:
-                            #    status_placeholder.warning(
-                            #        f"Saved locally; cloud submit failed: {resp.get('error', 'unknown error')}")
-                        except Exception as e:
-                            status_placeholder.warning(f"Saved locally; couldn’t reach Google endpoint: {e}")
+                        except Exception:
+                            pass  # ignore errors in the UI; still allow download
+
+                        # ---- show download button ----
+                        st.download_button(
+                            "⬇ Download PDF",
+                            data=pdf_bytes,
+                            file_name=fname,
+                            mime="application/pdf",
+                            key="dl_pdf_btn",
+                        )
+
+                        # ---- single line shown when the download button appears ----
+                        st.success("generated and submitted..")
+
+                        # (optional) still show Drive link if we have it
+                        if resp.get("ok") and resp.get("fileUrl"):
+                            st.caption(f"Drive link: {resp['fileUrl']}")
 
                         # ---- show download only AFTER generation ----
                         st.download_button("⬇ Download PDF", data=pdf_bytes, file_name=fname, mime="application/pdf",
