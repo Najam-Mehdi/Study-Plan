@@ -300,11 +300,6 @@ def send_to_google(pdf_bytes: bytes, filename: str, student: dict, meta: dict) -
         # Most common case: HTML login/permission page or empty body
         return {"ok": False, "error": f"non_json_response ({r.status_code}): {text[:200]!r}"}
 
-
-
-    doc = SimpleDocTemplate(
-        buf, pagesize=A4, leftMargin=36, rightMargin=36, topMargin=42, bottomMargin=42
-    )
     styles = getSampleStyleSheet()
     title = ParagraphStyle(name="TitleCenter", parent=styles["Heading2"], alignment=TA_CENTER)
     center = ParagraphStyle(name="Center", parent=styles["BodyText"], alignment=TA_CENTER)
@@ -983,16 +978,6 @@ def main():
         st.markdown("#### 🧑‍🎓 Student Details")
         ca, cb, cc = st.columns(3)
 
-        # --- Require all student details before proceeding ---
-        def _details_complete():
-            required = [name, pob, phone, matricula, email, degree_type, degree_name]
-            return all(str(x).strip() for x in required) and dob is not None
-
-        if not _details_complete():
-            st.warning(
-                "Please complete **all student details** (Name, Matricula, Place of Birth, Phone, Email, Degree Type/Name, Date of Birth) to continue.")
-            st.stop()  # hard-stop the app here so they cannot proceed
-
         with ca:
             name = st.text_input("Name")
             pob = st.text_input("Place of Birth")
@@ -1016,6 +1001,17 @@ def main():
             year_of_degree = st.selectbox("Year of Degree", ["First", "Second"], index=1)
             degree_type = st.text_input("Degree Type", value="LAUREA MAGISTRALE")
             degree_name = st.text_input("Degree Name", value="DATA SCIENCE")
+
+        # NOW validate (after inputs exist)
+        labels = ["Name", "Place of Birth", "Phone", "Matricula", "Institutional Email", "Degree Type", "Degree Name"]
+        vals = [name, pob, phone, matricula, email, degree_type, degree_name]
+        missing = [lab for lab, v in zip(labels, vals) if not str(v).strip()]
+        if not dob:
+            missing.append("Date of Birth")
+
+        if missing:
+            st.warning("Please complete: " + ", ".join(missing))
+            st.stop()
 
         # Bachelor's dropdown
         bkg_choice = st.selectbox(
@@ -1339,11 +1335,7 @@ def main():
                         )
 
                         # ---- filename exactly as before ----
-                        def short_code_from_subpath(label: str) -> str:
-                            base = label.split(" — ", 1)[0]
-                            head = base.split(" - ", 1)[0].strip()
-                            if head.upper().startswith("PDS "): head = head[4:].strip()
-                            return head or "PLAN"
+
 
                         plan_code = short_code_from_subpath(sub_choice)
                         plan_name = plan_code.replace("/", "-") + ("-PSI" if plan_is_psi else "")
