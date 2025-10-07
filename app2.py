@@ -1,4 +1,7 @@
 # NEW: talk to your Apps Script endpoint
+import re
+import hashlib
+
 import base64, requests
 
 import streamlit as st
@@ -46,6 +49,7 @@ def make_course(
 def course_label(c):
     return f"{c['name']} ({c['code']}, {c['cfu']} CFU)"
 
+
 # --- helper to serialize courses for logging ---
 def serialize_course(c: dict) -> dict:
     return {
@@ -56,6 +60,8 @@ def serialize_course(c: dict) -> dict:
         "year": c.get("year", ""),
         "semester": c.get("semester", ""),
     }
+
+
 def meets_free_requirement(free_courses: list[dict], plan_is_psi: bool) -> bool:
     """Standard: allow 1×12 CFU or 2 courses totaling ≥12 CFU. PSI: exactly 3."""
     if plan_is_psi:
@@ -151,7 +157,8 @@ def build_study_plan_pdf(
     page_w, _ = A4
     avail_w = page_w - doc.leftMargin - doc.rightMargin
     col_widths = [avail_w * 0.32, avail_w * 0.27, avail_w * 0.15, avail_w * 0.07, avail_w * 0.09, avail_w * 0.10]
-    header_style = ParagraphStyle(name="TblHeader", parent=styles["BodyText"], alignment=TA_CENTER, fontSize=9, leading=11)
+    header_style = ParagraphStyle(name="TblHeader", parent=styles["BodyText"], alignment=TA_CENTER, fontSize=9,
+                                  leading=11)
     cell = ParagraphStyle(name="TblCell", parent=styles["BodyText"], fontSize=9, leading=11)
     cell_center = ParagraphStyle(name="TblCellCenter", parent=cell, alignment=TA_CENTER)
 
@@ -175,11 +182,11 @@ def build_study_plan_pdf(
 
     tbl = PDFTable(data, colWidths=col_widths, repeatRows=1)
     tbl.setStyle(TableStyle([
-        ("GRID", (0,0), (-1,-1), 0.5, colors.black),
-        ("BACKGROUND", (0,0), (-1,0), colors.whitesmoke),
-        ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
-        ("BOTTOMPADDING", (0,0), (-1,-1), 4),
-        ("TOPPADDING", (0,0), (-1,-1), 4),
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.black),
+        ("BACKGROUND", (0, 0), (-1, 0), colors.whitesmoke),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
     ]))
     story.append(tbl)
     story.append(Spacer(1, 20))
@@ -197,13 +204,13 @@ def build_study_plan_pdf(
     sig = PDFTable([[f"Napoli ({date.today().strftime('%d/%m/%Y')})", "firma dello studente"]],
                    colWidths=[avail_w * 0.5, avail_w * 0.5])
     sig.setStyle(TableStyle([
-        ("ALIGN", (0,0), (0,0), "LEFT"),
-        ("ALIGN", (1,0), (1,0), "RIGHT"),
-        ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
-        ("LEFTPADDING", (0,0), (-1,-1), 0),
-        ("RIGHTPADDING", (0,0), (-1,-1), 0),
-        ("TOPPADDING", (0,0), (-1,-1), 4),
-        ("BOTTOMPADDING", (0,0), (-1,-1), 0),
+        ("ALIGN", (0, 0), (0, 0), "LEFT"),
+        ("ALIGN", (1, 0), (1, 0), "RIGHT"),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
     ]))
     story.append(sig)
 
@@ -234,7 +241,8 @@ def build_study_plan_pdf(
     story.append(Spacer(1, 3))
     story.append(Paragraph(f"<b>MATRICOLA NOME COMPLETO:</b> {matricula} {name}", styles["BodyText"]))
     story.append(Spacer(1, 8))
-    story.append(Paragraph("per l’iscrizione al Secondo Anno della LM – Data Science con il curriculum:", styles["BodyText"]))
+    story.append(
+        Paragraph("per l’iscrizione al Secondo Anno della LM – Data Science con il curriculum:", styles["BodyText"]))
     story.append(Paragraph(f"<b>{curriculum_disp}</b>", styles["BodyText"]))
     story.append(Spacer(1, 18))
 
@@ -243,12 +251,12 @@ def build_study_plan_pdf(
          Paragraph("Prof. Giuseppe Longo  —  The Coordinator of Ms Data Science", styles["BodyText"])]
     ], colWidths=[avail_w * 0.45, avail_w * 0.55])
     sig_comm.setStyle(TableStyle([
-        ("ALIGN", (0,0), (-1,-1), "LEFT"),
-        ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
-        ("LEFTPADDING", (0,0), (-1,-1), 0),
-        ("RIGHTPADDING", (0,0), (-1,-1), 0),
-        ("TOPPADDING", (0,0), (-1,-1), 4),
-        ("BOTTOMPADDING", (0,0), (-1,-1), 0),
+        ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
     ]))
     story.append(sig_comm)
 
@@ -259,7 +267,7 @@ def build_study_plan_pdf(
             c.saveState()
             c.setFont("Helvetica-Bold", 48)
             c.setFillColorRGB(0.8, 0.8, 0.8)
-            c.translate(w/2, h/2)
+            c.translate(w / 2, h / 2)
             c.rotate(45)
             c.drawCentredString(0, 0, wm_text)
             c.restoreState()
@@ -267,6 +275,7 @@ def build_study_plan_pdf(
     doc.build(story, onFirstPage=_watermark, onLaterPages=_watermark)
     buf.seek(0)
     return buf
+
 
 # --- Apps Script sender (uses your Streamlit secrets) ---
 def send_to_google(pdf_bytes: bytes, filename: str, student: dict, meta: dict) -> dict:
@@ -300,11 +309,6 @@ def send_to_google(pdf_bytes: bytes, filename: str, student: dict, meta: dict) -
         # Most common case: HTML login/permission page or empty body
         return {"ok": False, "error": f"non_json_response ({r.status_code}): {text[:200]!r}"}
 
-
-
-    doc = SimpleDocTemplate(
-        buf, pagesize=A4, leftMargin=36, rightMargin=36, topMargin=42, bottomMargin=42
-    )
     styles = getSampleStyleSheet()
     title = ParagraphStyle(name="TitleCenter", parent=styles["Heading2"], alignment=TA_CENTER)
     center = ParagraphStyle(name="Center", parent=styles["BodyText"], alignment=TA_CENTER)
@@ -331,12 +335,12 @@ def send_to_google(pdf_bytes: bytes, filename: str, student: dict, meta: dict) -
     # Body text with bold fields
     story.append(Paragraph(
         "Il/La sottoscritto/a <b>%s</b>, matr. <b>%s</b>, nato/a a <b>%s</b> il <b>%s</b>, cell. <b>%s</b>, e-mail <b>%s</b>" % (
-        name, matricula, pob, dob_str, phone, email),
+            name, matricula, pob, dob_str, phone, email),
         body_just,
     ))
     story.append(Paragraph(
         "iscritto/a nell’A.A. <b>%s</b> al <b>%s</b> anno del Corso di <b>%s</b> in <b>%s</b>, chiede alla Commissione di Coordinamento Didattico del Corso di Studio l’approvazione del presente Piano di Studio (PdS)." % (
-        aa, year_of_degree, degree_type, degree_name),
+            aa, year_of_degree, degree_type, degree_name),
         body_just,
     ))
     story.append(Spacer(1, 6))
@@ -487,9 +491,37 @@ def send_to_google(pdf_bytes: bytes, filename: str, student: dict, meta: dict) -
     return buf
 
 
+def validate_student_details(name: str, matricula: str, pob: str, dob, phone: str, email: str):
+    """Return (ok, errors[])"""
+    errs = []
+    if not (name or "").strip():       errs.append("Name")
+    if not (matricula or "").strip():  errs.append("Matricula")
+    if not (pob or "").strip():        errs.append("Place of Birth")
+    if not dob:                        errs.append("Date of Birth")
+    if not (phone or "").strip():      errs.append("Phone Number")
+    if not (email or "").strip():      errs.append("Institutional Email")
+    # simple email sanity check
+    if email and not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email.strip()):
+        errs.append("Valid Institutional Email")
+    return (len(errs) == 0, errs)
+
+
 # ==================== App ====================
 def main():
     st.set_page_config(page_title="Master's Study Plan", page_icon="🎓", layout="wide")
+
+    # one-time state
+    if "gen_inflight" not in st.session_state:
+        st.session_state.gen_inflight = False
+    if "generated_pdf_bytes" not in st.session_state:
+        st.session_state.generated_pdf_bytes = None
+    if "generated_fname" not in st.session_state:
+        st.session_state.generated_fname = None
+    if "server_resp" not in st.session_state:
+        st.session_state.server_resp = None
+    if "downloaded" not in st.session_state:
+        st.session_state.downloaded = False
+
     st.markdown(
         """
         <style>
@@ -528,6 +560,20 @@ def main():
             box-shadow: none;
           }
         </style>
+        <style>
+          /* Make disabled buttons look busy and non-clickable */
+          .stButton > button:disabled,
+          .stDownloadButton > button:disabled {
+          opacity: .65 !important;
+          cursor: not-allowed !important;
+         }
+          .stButton > button:disabled::after {
+          content: "  ⏳ Working…";
+          font-weight: 600;
+          margin-left: .5rem;
+         }
+        </style>
+        
         """,
         unsafe_allow_html=True,
     )
@@ -743,7 +789,7 @@ def main():
                     ),
                     make_course(
                         "Generative Artificial Intelligence",
-                        "U****", 6, "DIETI – LM Data Science", "Second", "first",
+                        "U7215", 6, "DIETI – LM Data Science", "Second", "first",
                         links=[],
                     ),
                 ],
@@ -1022,6 +1068,12 @@ def main():
             bkg_other = st.text_input("Please specify your bachelor's background")
         bachelors_degree = bkg_other.strip() or bkg_choice
 
+        # ----- Require student details before proceeding -----
+        details_ok, missing = validate_student_details(name, matricula, pob, dob, phone, email)
+        if not details_ok:
+            st.error("Please complete all student details before continuing: " + ", ".join(missing))
+            st.stop()  # hard stop: nothing below renders until details are complete
+
         st.markdown("---")
 
         # Plan mode selector
@@ -1287,124 +1339,151 @@ def main():
                 return head  # e.g. "ITE/TS", "ECO", "ISY", "FSE/PH"
 
             # Generate PDF
-            if (can_generate_catalogue or can_generate_custom) and st.button("📄 Generate PDF"):
-                dob_str = dob.strftime("%d/%m/%Y") if hasattr(dob, 'strftime') else str(dob)
-                free_block = selected_free if not using_custom else custom_free
+            can_generate_any = (can_generate_catalogue or can_generate_custom)
 
-                if plan_is_psi:
-                    ordered_courses = [
-                        curr_courses[0],
-                        *free_block,  # 3 items expected
-                        *FIXED_COMPONENTS,
-                    ]
+            generate_disabled = (
+                    not can_generate_any
+                    or st.session_state.gen_inflight
+            )
+
+            pressed = st.button(
+                "📄 Generate PDF & 📬 Submit",
+                type="primary",
+                use_container_width=True,
+                disabled=generate_disabled,
+                key="btn_generate"
+            )
+
+            if pressed and not st.session_state.gen_inflight:
+                st.session_state.gen_inflight = True
+                with st.spinner("Generating your PDF and submitting to Google… Please wait and do not click again."):
+                    dob_str = dob.strftime("%d/%m/%Y") if hasattr(dob, 'strftime') else str(dob)
+                    free_block = selected_free if not using_custom else custom_free
+
+                    if plan_is_psi:
+                        ordered_courses = [curr_courses[0], *free_block, *FIXED_COMPONENTS]
+                    else:
+                        ordered_courses = [curr_courses[0], curr_courses[1], *free_block, *FIXED_COMPONENTS]
+
+                    wm = "To Be Approved" if requires_approval else None
+                    pdf_buf = build_study_plan_pdf(
+                        name=name,
+                        matricula=matricula,
+                        pob=pob,
+                        dob_str=dob_str,
+                        phone=phone,
+                        email=email,
+                        academic_year=academic_year,
+                        year_of_degree=year_of_degree,
+                        degree_type=degree_type,
+                        degree_name=degree_name,
+                        main_path=main_choice,
+                        sub_path=(sub_choice + " — Piano di Studi Individuale" if plan_is_psi else sub_choice),
+                        courses=ordered_courses,
+                        bachelors_degree=bachelors_degree,
+                        watermark_text=wm,
+                    )
+
+                    # File name
+                    def short_code_from_subpath(label: str) -> str:
+                        base = (label or "").split(" — ", 1)[0]
+                        head = base.split(" - ", 1)[0].strip()
+                        if head.upper().startswith("PDS "):
+                            head = head[4:].strip()
+                        return head or "PLAN"
+
+                    plan_code = short_code_from_subpath(sub_choice)
+                    raw_fname = f"{(matricula or 'studente').strip()}_{plan_code.replace('/', '-')}{'-PSI' if plan_is_psi else ''}".strip(
+                        "_")
+                    safe_fname = "".join(ch if ch.isalnum() or ch in "._-" else "_" for ch in raw_fname)
+                    fname = f"{safe_fname}.pdf"
+
+                    pdf_bytes = pdf_buf.getvalue()
+
+                    # Build payloads for logging
+                    curricular_for_log = [curr_courses[0]] if plan_is_psi else curr_courses[:2]
+                    free_for_log = free_block
+                    fixed_for_log = FIXED_COMPONENTS
+
+                    student_payload = {
+                        "name": name, "matricula": matricula, "email": email, "phone": phone,
+                        "place_of_birth": pob, "dob": dob_str, "bachelors_background": bachelors_degree,
+                    }
+                    meta_payload = {
+                        "academic_year": academic_year,
+                        "year_of_degree": year_of_degree,
+                        "degree_type": degree_type,
+                        "degree_name": degree_name,
+                        "plan_mode": "PSI" if plan_is_psi else "Standard",
+                        "main_path": main_choice,
+                        "sub_path": sub_choice,
+                        "using_custom_free": using_custom,
+                        "requires_approval": requires_approval,
+                        "total_cfu": current_total,
+                        "curricular_courses": [serialize_course(c) for c in curricular_for_log],
+                        "free_courses": [serialize_course(c) for c in free_for_log],
+                        "fixed_components": [serialize_course(c) for c in fixed_for_log],
+                    }
+
+                    # Submit once; show feedback
+                    resp = {}
+                    try:
+                        resp = send_to_google(pdf_bytes, fname, student=student_payload, meta=meta_payload) or {}
+                    except Exception as e:
+                        resp = {"ok": False, "error": f"exception: {e}"}
+
+                    st.session_state.generated_pdf_bytes = pdf_bytes
+                    st.session_state.generated_fname = fname
+                    st.session_state.server_resp = resp
+                    st.session_state.downloaded = False
+
+                # after spinner
+                st.session_state.gen_inflight = False
+                if st.session_state.server_resp and st.session_state.server_resp.get("ok"):
+                    file_url = st.session_state.server_resp.get("fileUrl")
+                    st.success("✅ PDF generated and submitted to Google Drive/Sheet successfully.")
+                    if file_url:
+                        st.markdown(f"[Open uploaded file in Drive]({file_url})")
                 else:
-                    ordered_courses = [
-                        curr_courses[0],
-                        curr_courses[1],
-                        *free_block,  # 2 items expected
-                        *FIXED_COMPONENTS,
-                    ]
+                    st.warning(
+                        "PDF generated locally. We couldn’t confirm the upload automatically. You can still download it below.")
 
-                wm = "To Be Approved" if requires_approval else None
-
-                pdf_buf = build_study_plan_pdf(
-                    name=name,
-                    matricula=matricula,
-                    pob=pob,
-                    dob_str=dob_str,
-                    phone=phone,
-                    email=email,
-                    academic_year=academic_year,
-                    year_of_degree=year_of_degree,
-                    degree_type=degree_type,
-                    degree_name=degree_name,
-                    main_path=main_choice,
-                    sub_path=(sub_choice + " — Piano di Studi Individuale" if plan_is_psi else sub_choice),
-                    courses=ordered_courses,
-                    bachelors_degree=bachelors_degree,
-                    watermark_text=wm,
+            # Persistent download button (shows after a successful generation)
+            if st.session_state.generated_pdf_bytes:
+                clicked_download = st.download_button(
+                    "⬇ Download PDF Copy",
+                    data=st.session_state.generated_pdf_bytes,
+                    file_name=st.session_state.generated_fname or "studyplan.pdf",
+                    mime="application/pdf",
+                    use_container_width=True,
+                    disabled=st.session_state.downloaded or st.session_state.gen_inflight,
+                    key="btn_download_copy"
                 )
-                # Build short plan code from the selected sub path
-                plan_code = short_code_from_subpath(sub_choice)  # e.g., "ITE/TS", "ECO", "ISY", "FSE/PH"
-
-                # Use short code + optional PSI suffix
-                plan_name = plan_code.replace("/", "-") + ("-PSI" if plan_is_psi else "")
-
-                raw_fname = f"{(matricula or 'studente').strip()}_{plan_name}".strip("_")
-
-                # sanitize to avoid illegal filename chars (keep dot, underscore, dash)
-                safe_fname = "".join(ch if ch.isalnum() or ch in "._-" else "_" for ch in raw_fname)
-
-                fname = f"{safe_fname}.pdf"
-
-                #st.download_button("⬇ Download PDF", data=pdf_buf.getvalue(), file_name=fname, mime="application/pdf")
-                # Get the bytes once (use for both upload + download)
-                pdf_bytes = pdf_buf.getvalue()
-
-                # Build full payload (all inputs + all selected courses)
-                curricular_for_log = [curr_courses[0]] if plan_is_psi else curr_courses[:2]
-                free_for_log = free_block
-                fixed_for_log = FIXED_COMPONENTS
-
-                student_payload = {
-                    "name": name,
-                    "matricula": matricula,
-                    "email": email,
-                    "phone": phone,
-                    "place_of_birth": pob,
-                    "dob": dob_str,
-                    "bachelors_background": bachelors_degree,  # set by Change #3 below
-                }
-
-                meta_payload = {
-                    "academic_year": academic_year,
-                    "year_of_degree": year_of_degree,
-                    "degree_type": degree_type,
-                    "degree_name": degree_name,
-                    "plan_mode": "PSI" if plan_is_psi else "Standard",
-                    "main_path": main_choice,
-                    "sub_path": sub_choice,
-                    "using_custom_free": using_custom,
-                    "requires_approval": requires_approval,
-                    "total_cfu": current_total,
-                    "curricular_courses": [serialize_course(c) for c in curricular_for_log],
-                    "free_courses": [serialize_course(c) for c in free_for_log],
-                    "fixed_components": [serialize_course(c) for c in fixed_for_log],
-                }
-
-                # Send to Google (Apps Script) — SILENT (no UI messages)
-                try:
-                    _ = send_to_google(pdf_bytes, fname, student=student_payload, meta=meta_payload)
-                except Exception:
-                    pass
-
-                # Offer download regardless
-                st.download_button("⬇ Download PDF", data=pdf_bytes, file_name=fname, mime="application/pdf")
-
-
-
+                if clicked_download and not st.session_state.downloaded:
+                    st.session_state.downloaded = True
+                    st.toast("Starting download…")
 
             else:
-                # Clear, explicit warnings
-                if not using_custom:
-                    if not meets_free_requirement(selected_free, plan_is_psi):
-                        if plan_is_psi:
-                            st.warning("⚠ Please select exactly 3 free-choice courses.")
-                        else:
-                            st.warning(
-                                "⚠ Select either **one 12 CFU** free-choice course or **two courses totaling at least 12 CFU**.")
-                    if excess > 6:
-                        st.warning("⚠ Reduce CFUs to 66 or less to enable PDF generation.")
-                else:
-                    if not can_generate_custom:
-                        if plan_is_psi:
-                            st.warning(
-                                "⚠ Please complete all fields for 3 custom free-choice MS courses and ensure no duplicates.")
-                        else:
-                            st.warning(
-                                "⚠ For Standard plan, enter either 1 course (12 CFU) or 2 courses totaling at least 12 CFU; fix any duplicates/missing fields.")
-                    if excess > 6:
-                        st.warning("⚠ Reduce CFUs to 66 or less to enable PDF generation.")
+            # Clear, explicit warnings
+            if not using_custom:
+                if not meets_free_requirement(selected_free, plan_is_psi):
+                    if plan_is_psi:
+                        st.warning("⚠ Please select exactly 3 free-choice courses.")
+                    else:
+                        st.warning(
+                            "⚠ Select either **one 12 CFU** free-choice course or **two courses totaling at least 12 CFU**.")
+                if excess > 6:
+                    st.warning("⚠ Reduce CFUs to 66 or less to enable PDF generation.")
+            else:
+                if not can_generate_custom:
+                    if plan_is_psi:
+                        st.warning(
+                            "⚠ Please complete all fields for 3 custom free-choice MS courses and ensure no duplicates.")
+                    else:
+                        st.warning(
+                            "⚠ For Standard plan, enter either 1 course (12 CFU) or 2 courses totaling at least 12 CFU; fix any duplicates/missing fields.")
+                if excess > 6:
+                    st.warning("⚠ Reduce CFUs to 66 or less to enable PDF generation.")
 
 
 if __name__ == "__main__":
