@@ -1381,9 +1381,9 @@ def main():
                                 status_placeholder.success("✅ Submitted. A copy is available to download below.")
                                 if resp.get("fileUrl"):
                                     st.caption(f"Drive link: {resp['fileUrl']}")
-                            else:
-                                status_placeholder.warning(
-                                    f"Saved locally; cloud submit failed: {resp.get('error', 'unknown error')}")
+                            #else:
+                            #    status_placeholder.warning(
+                            #        f"Saved locally; cloud submit failed: {resp.get('error', 'unknown error')}")
                         except Exception as e:
                             status_placeholder.warning(f"Saved locally; couldn’t reach Google endpoint: {e}")
 
