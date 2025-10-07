@@ -112,8 +112,8 @@ def build_study_plan_pdf(
     doc = SimpleDocTemplate(
         buf, pagesize=A4, leftMargin=36, rightMargin=36, topMargin=42, bottomMargin=42
     )
-    styles = getSampleStyleSheet()
-    title = ParagraphStyle(name="TitleCenter", parent=styles["Heading2"], alignment=TA_CENTER)
+    #styles = getSampleStyleSheet()
+    #title = ParagraphStyle(name="TitleCenter", parent=styles["Heading2"], alignment=TA_CENTER)
     center = ParagraphStyle(name="Center", parent=styles["BodyText"], alignment=TA_CENTER)
     body_just = ParagraphStyle(name="BodyJust", parent=styles["BodyText"], alignment=TA_JUSTIFY)
 
@@ -1462,28 +1462,27 @@ def main():
                 if clicked_download and not st.session_state.downloaded:
                     st.session_state.downloaded = True
                     st.toast("Starting download…")
-
             else:
-            # Clear, explicit warnings
-            if not using_custom:
-                if not meets_free_requirement(selected_free, plan_is_psi):
-                    if plan_is_psi:
-                        st.warning("⚠ Please select exactly 3 free-choice courses.")
-                    else:
-                        st.warning(
-                            "⚠ Select either **one 12 CFU** free-choice course or **two courses totaling at least 12 CFU**.")
-                if excess > 6:
-                    st.warning("⚠ Reduce CFUs to 66 or less to enable PDF generation.")
-            else:
-                if not can_generate_custom:
-                    if plan_is_psi:
-                        st.warning(
-                            "⚠ Please complete all fields for 3 custom free-choice MS courses and ensure no duplicates.")
-                    else:
-                        st.warning(
-                            "⚠ For Standard plan, enter either 1 course (12 CFU) or 2 courses totaling at least 12 CFU; fix any duplicates/missing fields.")
-                if excess > 6:
-                    st.warning("⚠ Reduce CFUs to 66 or less to enable PDF generation.")
+                # Clear, explicit warnings
+                if not using_custom:
+                    if not meets_free_requirement(selected_free, plan_is_psi):
+                        if plan_is_psi:
+                            st.warning("⚠ Please select exactly 3 free-choice courses.")
+                        else:
+                            st.warning(
+                                "⚠ Select either **one 12 CFU** free-choice course or **two courses totaling at least 12 CFU**.")
+                    if excess > 6:
+                        st.warning("⚠ Reduce CFUs to 66 or less to enable PDF generation.")
+                else:
+                    if not can_generate_custom:
+                        if plan_is_psi:
+                            st.warning(
+                                "⚠ Please complete all fields for 3 custom free-choice MS courses and ensure no duplicates.")
+                        else:
+                            st.warning(
+                                "⚠ For Standard plan, enter either 1 course (12 CFU) or 2 courses totaling at least 12 CFU; fix any duplicates/missing fields.")
+                    if excess > 6:
+                        st.warning("⚠ Reduce CFUs to 66 or less to enable PDF generation.")
 
 
 if __name__ == "__main__":
