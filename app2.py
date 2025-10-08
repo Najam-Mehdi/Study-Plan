@@ -1384,7 +1384,7 @@ def main():
 
                         # ---- show download button ----
                         st.download_button(
-                            "⬇ Download PDF",
+                            "⬇ Download PDF Copy",
                             data=pdf_bytes,
                             file_name=fname,
                             mime="application/pdf",
@@ -1399,7 +1399,7 @@ def main():
                             st.caption(f"Drive link: {resp['fileUrl']}")
 
                         # ---- show download only AFTER generation ----
-                        st.download_button("⬇ Download PDF Copy", data=pdf_bytes, file_name=fname, mime="application/pdf")
+                        #st.download_button("⬇ Download PDF Copy", data=pdf_bytes, file_name=fname, mime="application/pdf")
 
                 finally:
                     st.session_state.submitting_pdf = False
